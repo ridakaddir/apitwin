@@ -1,0 +1,15 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "apitwin",
+  "description": "Fast, zero-dependency CLI tool for mocking, stubbing, and proxying HTTP and gRPC APIs",
+  "folders": ["docs", "examples"],
+  "excludeFolders": ["website", "node_modules"],
+  "excludeFiles": [],
+  "rules": [
+    "apitwin config files use TOML format by default, but JSON and YAML are also supported",
+    "Install via npm: npm install -D @ridakaddir/apitwin",
+    "Use 'apitwin serve' to start the mock server, not 'apitwin start'",
+    "Directory-based stubs enable automatic CRUD operations on JSON files",
+    "Response transitions allow stateful behavior across requests"
+  ]
+}
