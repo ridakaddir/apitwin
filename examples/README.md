@@ -3,10 +3,10 @@
 Each example is a **directory** of config files. Run any of them with:
 
 ```sh
-mockr --config examples/<name>
+apitwin --config examples/<name>
 ```
 
-mockr loads all `.toml`, `.yaml`, `.yml`, and `.json` files in the directory and merges their routes. Files are loaded in alphabetical order — routes defined earlier take priority.
+apitwin loads all `.toml`, `.yaml`, `.yml`, and `.json` files in the directory and merges their routes. Files are loaded in alphabetical order — routes defined earlier take priority.
 
 ---
 
@@ -25,7 +25,7 @@ examples/
 │   └── stubs/
 │
 ├── cross-refs/               # Cross-endpoint references with {{ref:...}} syntax
-│   ├── mockr.toml            # Routes with {{ref:...}} tokens and dynamic refs in defaults
+│   ├── apitwin.toml            # Routes with {{ref:...}} tokens and dynamic refs in defaults
 │   └── stubs/
 │       ├── models/           # Model data files
 │       ├── endpoints/        # Endpoint files referencing models
@@ -35,11 +35,11 @@ examples/
 │       └── templates/        # Go templates for data transformation
 │
 ├── directory-stubs/          # Directory-based CRUD (one file per resource)
-│   ├── mockr.toml            # Full CRUD with directory aggregation + auto-ID
+│   ├── apitwin.toml            # Full CRUD with directory aggregation + auto-ID
 │   └── stubs/users/          # One JSON file per user
 │
 ├── dynamic-files/            # {source.field} placeholders in file paths
-│   ├── mockr.toml            # GET /api/orders + POST /api/profile
+│   ├── apitwin.toml            # GET /api/orders + POST /api/profile
 │   └── stubs/
 │
 
@@ -48,29 +48,29 @@ examples/
 │   └── orders.toml           # GET /orders/* — shipped → out_for_delivery → delivered
 │
 ├── record-mode/              # Proxy + auto-record workflow
-│   └── mockr.toml
+│   └── apitwin.toml
 │
 ├── openapi-generate/         # Generate config from an OpenAPI spec
 │   └── README.md             # Instructions (generated files not committed)
 │
 ├── grpc-mock/                # gRPC — basic unary mock (UserService)
 │   ├── users.proto           # Proto definition
-│   ├── mockr.toml            # [[grpc_routes]] with named cases
+│   ├── apitwin.toml            # [[grpc_routes]] with named cases
 │   └── stubs/
 │
 ├── grpc-conditions/          # gRPC — condition routing on request body fields
 │   ├── orders.proto
-│   ├── mockr.toml
+│   ├── apitwin.toml
 │   └── stubs/
 │
 ├── grpc-proxy/               # gRPC — selective mock + transparent proxy fallthrough
 │   ├── products.proto
-│   ├── mockr.toml
+│   ├── apitwin.toml
 │   └── stubs/
 │
 └── grpc-directory-persist/   # gRPC — directory-based CRUD
     ├── items.proto
-    ├── mockr.toml
+    ├── apitwin.toml
     └── stubs/
 ```
 
@@ -81,7 +81,7 @@ examples/
 Serves product data from stub files. Shows hot-reload — change `fallback` in any file and the next request reflects it immediately, no restart.
 
 ```sh
-mockr --config examples/basic
+apitwin --config examples/basic
 ```
 
 ```sh
@@ -99,7 +99,7 @@ Switch to error: change `fallback = "error"`.
 The same endpoint returns different responses depending on who is calling.
 
 ```sh
-mockr --config examples/conditions
+apitwin --config examples/conditions
 ```
 
 **Checkout** (`checkout.toml`) — body, query, and header conditions:
@@ -127,7 +127,7 @@ http POST :4000/api/orders payment:='{"method":"card"}'                         
 Directory-based CRUD where each user is stored as a separate JSON file. Demonstrates auto-ID generation, directory aggregation, individual file operations, and **persist defaults** (enriching created resources with server-generated fields like `{{uuid}}` and `{{now}}`).
 
 ```sh
-mockr --config examples/directory-stubs
+apitwin --config examples/directory-stubs
 ```
 
 ```sh
@@ -161,7 +161,7 @@ Reset: `git checkout examples/directory-stubs/stubs/users/`
 Cross-endpoint references with the `{{ref:...}}` syntax. Endpoints can reference data from other stub files with optional filtering and template transformation for field renaming.
 
 ```sh
-mockr --config examples/cross-refs
+apitwin --config examples/cross-refs
 ```
 
 ```sh
@@ -221,7 +221,7 @@ http POST :4000/api/techcorp/environments/staging/endpoints \
 File paths contain `{source.field}` placeholders resolved from the request at runtime.
 
 ```sh
-mockr --config examples/dynamic-files
+apitwin --config examples/dynamic-files
 ```
 
 ```sh
@@ -250,7 +250,7 @@ http ':4000/api/orders?username=charlie'
 Two modes for simulating state changes over time.
 
 ```sh
-mockr --config examples/transitions
+apitwin --config examples/transitions
 ```
 
 ### Request-time transitions (orders)
@@ -273,7 +273,7 @@ watch -n 5 'http :4000/orders/o123'
 
 ### Background transitions (deployments)
 
-POST creates a resource, and mockr **mutates the file on disk** in the background after a delay. All reads (GET by ID, list) see the updated state.
+POST creates a resource, and apitwin **mutates the file on disk** in the background after a delay. All reads (GET by ID, list) see the updated state.
 
 ```sh
 # 1. Create a deployment
@@ -297,7 +297,7 @@ http :4000/deployments/ep-demo
 Proxy a real API and automatically record responses as stub files. Each new path is recorded once — subsequent requests to the same path are served from the stub (`via=stub`).
 
 ```sh
-mockr --config examples/record-mode \
+apitwin --config examples/record-mode \
       --target https://jsonplaceholder.typicode.com \
       --api-prefix /api \
       --record
@@ -313,17 +313,17 @@ http :4000/api/users/1
 After recording, serve fully offline (no `--target`, no `--record`):
 
 ```sh
-mockr --config examples/record-mode --api-prefix /api
+apitwin --config examples/record-mode --api-prefix /api
 ```
 
 ---
 
 ## openapi-generate
 
-Generate a complete mockr config from the [Swagger Petstore v3](https://petstore3.swagger.io) spec — no config writing required.
+Generate a complete apitwin config from the [Swagger Petstore v3](https://petstore3.swagger.io) spec — no config writing required.
 
 ```sh
-mockr generate \
+apitwin generate \
   --spec https://petstore3.swagger.io/api/v3/openapi.json \
   --out examples/openapi-generate/mocks
 ```
@@ -331,7 +331,7 @@ mockr generate \
 Then serve immediately:
 
 ```sh
-mockr --config examples/openapi-generate/mocks
+apitwin --config examples/openapi-generate/mocks
 ```
 
 ```sh
@@ -353,7 +353,7 @@ Basic gRPC mocking with named cases, error codes, and template tokens. No upstre
 > **Prerequisites:** install [grpcurl](https://github.com/fullstorydev/grpcurl) to send gRPC calls from the terminal.
 
 ```sh
-mockr --config examples/grpc-mock \
+apitwin --config examples/grpc-mock \
       --grpc-proto examples/grpc-mock/users.proto
 ```
 
@@ -364,7 +364,7 @@ mockr --config examples/grpc-mock \
 grpcurl -plaintext -d '{"user_id":"1"}' \
   localhost:50051 users.UserService/GetUser
 
-# Switch to not_found: edit mockr.toml and change fallback = "not_found"
+# Switch to not_found: edit apitwin.toml and change fallback = "not_found"
 grpcurl -plaintext -d '{"user_id":"999"}' \
   localhost:50051 users.UserService/GetUser
 
@@ -379,7 +379,7 @@ grpcurl -plaintext -d '{"user_id":"1"}' \
 grpcurl -plaintext -d '{"page":1,"page_size":10}' \
   localhost:50051 users.UserService/ListUsers
 
-# Empty list: change fallback = "empty" in mockr.toml
+# Empty list: change fallback = "empty" in apitwin.toml
 ```
 
 **CreateUser (template tokens — {{uuid}} rendered on every call):**
@@ -406,7 +406,7 @@ grpcurl -plaintext localhost:50051 describe users.UserService
 Condition-based routing on decoded protobuf request body fields. Same `source / field / op / value` config as REST, applied to the protojson representation of the incoming message.
 
 ```sh
-mockr --config examples/grpc-conditions \
+apitwin --config examples/grpc-conditions \
       --grpc-proto examples/grpc-conditions/orders.proto
 ```
 
@@ -472,7 +472,7 @@ Demonstrates selective mocking with transparent proxy fallthrough:
 **Mock-only mode (no upstream):**
 
 ```sh
-mockr --config examples/grpc-proxy \
+apitwin --config examples/grpc-proxy \
       --grpc-proto examples/grpc-proxy/products.proto
 
 # Stubbed — returns local file
@@ -491,7 +491,7 @@ grpcurl -plaintext -d '{"category":"clothing","limit":5}' \
 **With upstream proxy:**
 
 ```sh
-mockr --config examples/grpc-proxy \
+apitwin --config examples/grpc-proxy \
       --grpc-proto examples/grpc-proxy/products.proto \
       --grpc-target localhost:9090
 
@@ -519,7 +519,7 @@ grpcurl -plaintext localhost:50051 describe products.ProductService
 gRPC directory-based CRUD where each item is stored as a separate JSON file. Demonstrates protobuf ↔ JSON conversion, directory aggregation, and auto-ID generation.
 
 ```sh
-mockr --config examples/grpc-directory-persist \
+apitwin --config examples/grpc-directory-persist \
       --grpc-proto examples/grpc-directory-persist/items.proto
 ```
 

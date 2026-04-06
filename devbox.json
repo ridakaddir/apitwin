@@ -7,7 +7,7 @@
   ],
   "shell": {
     "init_hook": [
-      "echo 'mockr dev environment ready. Run: task --list'"
+      "echo 'apitwin dev environment ready. Run: task --list'"
     ],
     "scripts": {
       "build":   ["task build"],

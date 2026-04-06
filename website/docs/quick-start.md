@@ -9,8 +9,8 @@
 Generate a complete mock config from any OpenAPI 3 spec and start serving immediately:
 
 ```sh
-mockr generate --spec openapi.yaml --out ./mocks
-mockr --config ./mocks
+apitwin generate --spec openapi.yaml --out ./mocks
+apitwin --config ./mocks
 ```
 
 Your mock server is now running at `http://localhost:4000` with routes for every operation in the spec.
@@ -19,18 +19,18 @@ Your mock server is now running at `http://localhost:4000` with routes for every
 
 ## HTTP — manual scaffold
 
-Create a starter config and point your frontend at mockr:
+Create a starter config and point your frontend at apitwin:
 
 ```sh
-mockr --init
-mockr --target https://api.example.com
+apitwin --init
+apitwin --target https://api.example.com
 ```
 
 Your frontend points at `http://localhost:4000`:
 - **Matched routes** return mock responses
 - **Everything else** proxies to `--target`
 
-Edit `mockr.toml` to add routes, change responses, or switch between cases — changes apply instantly with no restart.
+Edit `apitwin.toml` to add routes, change responses, or switch between cases — changes apply instantly with no restart.
 
 ### Minimal config example
 
@@ -99,10 +99,10 @@ Generate config and stubs from a proto file, then start both HTTP and gRPC serve
 
 ```sh
 # Generate config + stubs
-mockr generate --proto service.proto --out ./mocks
+apitwin generate --proto service.proto --out ./mocks
 
 # Start servers (HTTP on :4000, gRPC on :50051)
-mockr --config ./mocks --grpc-proto service.proto
+apitwin --config ./mocks --grpc-proto service.proto
 ```
 
 Inspect with `grpcurl`:

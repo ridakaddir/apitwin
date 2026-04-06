@@ -4,7 +4,7 @@
 
 ---
 
-mockr provides a rich set of features for mocking, stubbing, and proxying APIs. This section covers each feature in detail.
+apitwin provides a rich set of features for mocking, stubbing, and proxying APIs. This section covers each feature in detail.
 
 | Feature | Description |
 |---|---|

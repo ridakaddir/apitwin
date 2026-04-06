@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ridakaddir/mockr/internal/persist"
+	"github.com/ridakaddir/apitwin/internal/persist"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

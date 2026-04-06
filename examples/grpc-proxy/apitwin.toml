@@ -7,11 +7,11 @@
 #   - UpdateProduct → always forwarded to the upstream (no mock defined)
 #
 # Run (mock-only, no upstream):
-#   mockr --config examples/grpc-proxy \
+#   apitwin --config examples/grpc-proxy \
 #         --grpc-proto examples/grpc-proxy/products.proto
 #
 # Run (with upstream proxy for unmatched methods):
-#   mockr --config examples/grpc-proxy \
+#   apitwin --config examples/grpc-proxy \
 #         --grpc-proto examples/grpc-proxy/products.proto \
 #         --grpc-target localhost:9090
 #

@@ -59,7 +59,7 @@ func TestNewRefContext_HeaderSanitization(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer secret-token")
 	req.Header.Set("Cookie", "session=secret-session")
 	req.Header.Set("Proxy-Authorization", "Basic secret-proxy")
-	req.Header.Set("User-Agent", "mockr-test")
+	req.Header.Set("User-Agent", "apitwin-test")
 
 	ctx := NewRefContext(req, []byte(`{}`), nil)
 
@@ -67,8 +67,8 @@ func TestNewRefContext_HeaderSanitization(t *testing.T) {
 	if ctx.Headers.Get("X-Tenant-Id") != "safe-header" {
 		t.Errorf("expected X-Tenant-Id=safe-header, got %v", ctx.Headers.Get("X-Tenant-Id"))
 	}
-	if ctx.Headers.Get("User-Agent") != "mockr-test" {
-		t.Errorf("expected User-Agent=mockr-test, got %v", ctx.Headers.Get("User-Agent"))
+	if ctx.Headers.Get("User-Agent") != "apitwin-test" {
+		t.Errorf("expected User-Agent=apitwin-test, got %v", ctx.Headers.Get("User-Agent"))
 	}
 
 	// Sensitive headers should be stripped

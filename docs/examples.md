@@ -11,13 +11,13 @@ The `examples/` directory contains runnable examples for each feature. Each exam
 **HTTP examples:**
 
 ```sh
-mockr --config examples/<name>
+apitwin --config examples/<name>
 ```
 
 **gRPC examples:**
 
 ```sh
-mockr --config examples/<name> --grpc-proto examples/<name>/<file>.proto
+apitwin --config examples/<name> --grpc-proto examples/<name>/<file>.proto
 ```
 
 ---

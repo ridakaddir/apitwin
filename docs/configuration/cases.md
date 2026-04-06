@@ -59,7 +59,7 @@ file   = "stubs/countries/{path.countryId}.json"
 
 ### Directory aggregation
 
-When `file` points to a directory (trailing `/`), mockr aggregates all `.json` files into an array:
+When `file` points to a directory (trailing `/`), apitwin aggregates all `.json` files into an array:
 
 ```toml
 [routes.cases.list]

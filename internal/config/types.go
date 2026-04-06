@@ -1,6 +1,6 @@
 package config
 
-// Config is the top-level structure for mockr config files (JSON/YAML/TOML).
+// Config is the top-level structure for apitwin config files (JSON/YAML/TOML).
 type Config struct {
 	Routes     []Route     `json:"routes"      yaml:"routes"      toml:"routes"`
 	GRPCRoutes []GRPCRoute `json:"grpc_routes" yaml:"grpc_routes" toml:"grpc_routes"`

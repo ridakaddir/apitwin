@@ -1,6 +1,6 @@
 # openapi-generate example
 
-Shows how to generate a complete mockr config from an OpenAPI spec in one command.
+Shows how to generate a complete apitwin config from an OpenAPI spec in one command.
 Uses the [Swagger Petstore v3](https://petstore3.swagger.io) as the source spec.
 
 ---
@@ -8,7 +8,7 @@ Uses the [Swagger Petstore v3](https://petstore3.swagger.io) as the source spec.
 ## 1. Generate
 
 ```sh
-mockr generate \
+apitwin generate \
   --spec https://petstore3.swagger.io/api/v3/openapi.json \
   --out examples/openapi-generate/mocks
 ```
@@ -41,7 +41,7 @@ examples/openapi-generate/mocks/
 ## 2. Serve
 
 ```sh
-mockr --config examples/openapi-generate/mocks
+apitwin --config examples/openapi-generate/mocks
 ```
 
 All 19 routes are immediately available at `http://localhost:4000`.
@@ -96,13 +96,13 @@ Change it back to `"success"` to restore the 200 response.
 
 ```sh
 # YAML format
-mockr generate \
+apitwin generate \
   --spec https://petstore3.swagger.io/api/v3/openapi.json \
   --out examples/openapi-generate/mocks-yaml \
   --format yaml
 
 # Single file instead of one per tag
-mockr generate \
+apitwin generate \
   --spec https://petstore3.swagger.io/api/v3/openapi.json \
   --out examples/openapi-generate/mocks-single \
   --split=false

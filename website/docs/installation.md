@@ -9,19 +9,19 @@
 Best for frontend projects. Installs a platform-specific binary as a dev dependency:
 
 ```sh
-npm install -D @ridakaddir/mockr
+npm install -D @ridakaddir/apitwin
 ```
 
 Use it via `npx` or in `package.json` scripts:
 
 ```sh
-npx mockr --init
+npx apitwin --init
 ```
 
 ```json
 {
   "scripts": {
-    "mock": "mockr --config ./mocks --target https://api.example.com"
+    "mock": "apitwin --config ./mocks --target https://api.example.com"
   }
 }
 ```
@@ -30,27 +30,27 @@ npx mockr --init
 
 ## Binary download
 
-Download a pre-built binary from the [latest release](https://github.com/ridakaddir/mockr/releases):
+Download a pre-built binary from the [latest release](https://github.com/ridakaddir/apitwin/releases):
 
 **macOS Apple Silicon:**
 
 ```sh
-curl -L https://github.com/ridakaddir/mockr/releases/latest/download/mockr_darwin_arm64.tar.gz | tar xz
-sudo mv mockr /usr/local/bin/
+curl -L https://github.com/ridakaddir/apitwin/releases/latest/download/apitwin_darwin_arm64.tar.gz | tar xz
+sudo mv apitwin /usr/local/bin/
 ```
 
 **macOS Intel:**
 
 ```sh
-curl -L https://github.com/ridakaddir/mockr/releases/latest/download/mockr_darwin_amd64.tar.gz | tar xz
-sudo mv mockr /usr/local/bin/
+curl -L https://github.com/ridakaddir/apitwin/releases/latest/download/apitwin_darwin_amd64.tar.gz | tar xz
+sudo mv apitwin /usr/local/bin/
 ```
 
 **Linux x86-64:**
 
 ```sh
-curl -L https://github.com/ridakaddir/mockr/releases/latest/download/mockr_linux_amd64.tar.gz | tar xz
-sudo mv mockr /usr/local/bin/
+curl -L https://github.com/ridakaddir/apitwin/releases/latest/download/apitwin_linux_amd64.tar.gz | tar xz
+sudo mv apitwin /usr/local/bin/
 ```
 
 ---
@@ -60,7 +60,7 @@ sudo mv mockr /usr/local/bin/
 Requires Go 1.25+:
 
 ```sh
-go install github.com/ridakaddir/mockr@latest
+go install github.com/ridakaddir/apitwin@latest
 ```
 
 ---
@@ -68,11 +68,11 @@ go install github.com/ridakaddir/mockr@latest
 ## Build from source
 
 ```sh
-git clone https://github.com/ridakaddir/mockr.git
-cd mockr
+git clone https://github.com/ridakaddir/apitwin.git
+cd apitwin
 task build          # requires Task (https://taskfile.dev)
 # or
-go build -o mockr .
+go build -o apitwin .
 ```
 
 ---
@@ -80,8 +80,8 @@ go build -o mockr .
 ## Verify installation
 
 ```sh
-mockr --version
-mockr --help
+apitwin --version
+apitwin --help
 ```
 
 ---

@@ -7,8 +7,8 @@
 ## Usage
 
 ```
-mockr [flags]
-mockr generate [flags]
+apitwin [flags]
+apitwin generate [flags]
 ```
 
 ---
@@ -21,9 +21,9 @@ mockr generate [flags]
 |---|---|---|---|
 | `--target <url>` | `-t` | — | Upstream HTTP API to proxy unmatched requests to |
 | `--port <n>` | `-p` | `4000` | HTTP port to listen on |
-| `--config <path>` | `-c` | `mockr.toml` or `.` | Config file or directory (auto-detected) |
+| `--config <path>` | `-c` | `apitwin.toml` or `.` | Config file or directory (auto-detected) |
 | `--api-prefix <path>` | `-a` | — | Strip this prefix before matching routes and forwarding upstream (e.g. `/api`) |
-| `--init` | | | Scaffold a `mockr.toml` template in the current directory |
+| `--init` | | | Scaffold a `apitwin.toml` template in the current directory |
 | `--record` | | | Record mode: proxy all requests and save responses as stubs |
 
 ### gRPC server
@@ -49,10 +49,10 @@ gRPC server starts **only** when `--grpc-proto` is provided.
 
 ### `generate`
 
-Generate a mockr config from an OpenAPI spec or `.proto` files.
+Generate a apitwin config from an OpenAPI spec or `.proto` files.
 
 ```sh
-mockr generate [flags]
+apitwin generate [flags]
 ```
 
 #### OpenAPI flags
@@ -80,39 +80,39 @@ Either `--spec` or `--proto` is required. `--proto` takes precedence if both are
 **Scaffold and start:**
 
 ```sh
-mockr --init
-mockr --target https://restcountries.com/v3.1
+apitwin --init
+apitwin --target https://restcountries.com/v3.1
 ```
 
 **Generate from OpenAPI and serve:**
 
 ```sh
-mockr generate --spec openapi.yaml --out ./mocks
-mockr --config ./mocks
+apitwin generate --spec openapi.yaml --out ./mocks
+apitwin --config ./mocks
 ```
 
 **Selective mock with proxy fallthrough:**
 
 ```sh
-mockr --config ./mocks --target https://restcountries.com/v3.1
+apitwin --config ./mocks --target https://restcountries.com/v3.1
 ```
 
 **Record real API responses:**
 
 ```sh
-mockr --config ./mocks --target https://restcountries.com/v3.1 --record
+apitwin --config ./mocks --target https://restcountries.com/v3.1 --record
 ```
 
 **Start HTTP + gRPC servers:**
 
 ```sh
-mockr --config ./mocks --grpc-proto geo.proto
+apitwin --config ./mocks --grpc-proto geo.proto
 ```
 
 **gRPC with upstream proxy:**
 
 ```sh
-mockr --config ./mocks \
+apitwin --config ./mocks \
       --grpc-proto geo.proto \
       --grpc-target localhost:9090
 ```

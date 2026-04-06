@@ -1,12 +1,12 @@
 version: "3"
 
 vars:
-  BINARY: mockr
+  BINARY: apitwin
   MODULE:
     sh: go list -m
   VERSION:
     sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
-  BUILD_FLAGS: -ldflags="-s -w -X github.com/ridakaddir/mockr/cmd.version={{.VERSION}}"
+  BUILD_FLAGS: -ldflags="-s -w -X github.com/ridakaddir/apitwin/cmd.version={{.VERSION}}"
   GOLANGCI_LINT_VERSION: v2.11.3   # keep in sync with .github/workflows/ci.yml
   GOLANGCI_LINT_BIN: /tmp/golangci-lint-ci/golangci-lint
 
@@ -15,7 +15,7 @@ tasks:
   # ── Build ──────────────────────────────────────────────────────────────────
 
   build:
-    desc: Build the mockr binary
+    desc: Build the apitwin binary
     cmds:
       - go build {{.BUILD_FLAGS}} -o {{.BINARY}} .
     sources:
@@ -31,14 +31,14 @@ tasks:
       - go build -race {{.BUILD_FLAGS}} -o {{.BINARY}} .
 
   install:
-    desc: Install mockr to $GOPATH/bin
+    desc: Install apitwin to $GOPATH/bin
     cmds:
       - go install {{.BUILD_FLAGS}} .
 
   # ── Run ────────────────────────────────────────────────────────────────────
 
   run:
-    desc: "Run mockr (pass args via CLI_ARGS, e.g. task run -- --config examples/basic)"
+    desc: "Run apitwin (pass args via CLI_ARGS, e.g. task run -- --config examples/basic)"
     cmds:
       - go run . {{.CLI_ARGS}}
 
@@ -153,7 +153,7 @@ tasks:
   # ── Generate ───────────────────────────────────────────────────────────────
 
   generate:
-    desc: "Generate mockr config from an OpenAPI spec (SPEC=<file|url> OUT=./mocks)"
+    desc: "Generate apitwin config from an OpenAPI spec (SPEC=<file|url> OUT=./mocks)"
     cmds:
       - go run . generate --spec {{.SPEC}} --out {{.OUT | default "mocks"}} {{.CLI_ARGS}}
     requires:
@@ -165,7 +165,7 @@ tasks:
       - go run . generate --spec https://petstore3.swagger.io/api/v3/openapi.json --out /tmp/petstore-mocks
 
   generate:proto:
-    desc: "Generate mockr config from a .proto file (PROTO=<file> OUT=./mocks)"
+    desc: "Generate apitwin config from a .proto file (PROTO=<file> OUT=./mocks)"
     cmds:
       - go run . generate --proto {{.PROTO}} --out {{.OUT | default "mocks"}} {{.CLI_ARGS}}
     requires:
@@ -214,6 +214,6 @@ tasks:
       - echo "pre-push hook installed — lint:ci will run before every git push"
 
   init:
-    desc: Scaffold a mockr.toml template in the current directory
+    desc: Scaffold a apitwin.toml template in the current directory
     cmds:
       - go run . --init

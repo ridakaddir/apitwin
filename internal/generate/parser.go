@@ -16,7 +16,7 @@ import (
 type Operation struct {
 	Method      string // uppercase HTTP method
 	Path        string // original OpenAPI path e.g. /users/{id}
-	MatchPath   string // mockr match pattern e.g. /users/*
+	MatchPath   string // apitwin match pattern e.g. /users/*
 	Tag         string // first tag or "default"
 	OperationID string // operationId if present
 	Summary     string
@@ -151,7 +151,7 @@ func parseResponses(op *openapi3.Operation, doc *openapi3.T) ([]OperationRespons
 		}
 		resp := ref.Value
 
-		// OpenAPI "default" is a catch-all — map to 0 so mockr uses its own
+		// OpenAPI "default" is a catch-all — map to 0 so apitwin uses its own
 		// default (200) at runtime and the stub filename doesn't collide with
 		// a real 200 response.
 		statusCode := 0

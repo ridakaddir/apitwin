@@ -9,10 +9,10 @@ Use `--api-prefix` when your frontend calls `/api/*` but the real upstream uses 
 ## Usage
 
 ```sh
-mockr --target https://api.example.com --api-prefix /api
+apitwin --target https://api.example.com --api-prefix /api
 ```
 
-mockr accepts requests at `/api/*`, strips `/api`, matches routes and forwards upstream using the stripped path.
+apitwin accepts requests at `/api/*`, strips `/api`, matches routes and forwards upstream using the stripped path.
 
 ## Route definitions
 
@@ -26,7 +26,7 @@ enabled  = true
 fallback = "success"
 ```
 
-Your frontend calls `http://localhost:4000/api/countries`, mockr strips `/api`, and matches against `/countries`.
+Your frontend calls `http://localhost:4000/api/countries`, apitwin strips `/api`, and matches against `/countries`.
 
 ---
 

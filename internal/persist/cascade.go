@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/ridakaddir/mockr/internal/config"
+	"github.com/ridakaddir/apitwin/internal/config"
 )
 
 // CascadeOperation represents a multi-file mutation operation with transaction semantics.

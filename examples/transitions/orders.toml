@@ -10,7 +10,7 @@
 #   t = 90s  → delivered       (terminal — stays here)
 #
 # Run:
-#   mockr --config examples/transitions
+#   apitwin --config examples/transitions
 #
 # Try (watch the status change as time passes):
 #   watch -n 5 'http :4000/orders/o123'

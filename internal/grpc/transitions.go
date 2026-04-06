@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ridakaddir/mockr/internal/config"
+	"github.com/ridakaddir/apitwin/internal/config"
 )
 
 // grpcTransitionState tracks the first-request timestamp for each gRPC route

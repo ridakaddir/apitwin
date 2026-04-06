@@ -1,7 +1,7 @@
 # Dynamic files — file paths resolved at request time from query params or body fields
 #
 # Run:
-#   mockr --config examples/dynamic-files
+#   apitwin --config examples/dynamic-files
 #
 # Try:
 #   # Orders resolved from ?username= query param

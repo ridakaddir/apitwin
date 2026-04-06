@@ -4,7 +4,7 @@
 
 ---
 
-mockr supports `{name}` placeholders in route patterns to extract values from URL paths. Extracted values can be used for key resolution, conditions, and dynamic file paths.
+apitwin supports `{name}` placeholders in route patterns to extract values from URL paths. Extracted values can be used for key resolution, conditions, and dynamic file paths.
 
 ## Syntax
 
@@ -81,7 +81,7 @@ file = "stubs/continents/{path.continentId}/countries/{path.countryId}.json"
 
 ## Persistence with named parameters
 
-Named path parameters work as a fallback for key resolution in `merge = "append"` operations. When the request body doesn't contain the `key` field, mockr resolves it from the URL path:
+Named path parameters work as a fallback for key resolution in `merge = "append"` operations. When the request body doesn't contain the `key` field, apitwin resolves it from the URL path:
 
 ```toml
 [[routes]]

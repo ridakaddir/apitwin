@@ -1,6 +1,6 @@
-# mockr Documentation
+# apitwin Documentation
 
-Welcome to the **mockr** documentation — your complete guide to mocking, stubbing, and proxying HTTP and gRPC APIs during development.
+Welcome to the **apitwin** documentation — your complete guide to mocking, stubbing, and proxying HTTP and gRPC APIs during development.
 
 > Looking for the project README? See the [repository root](../README.md).
 
@@ -45,12 +45,12 @@ All examples throughout this documentation use a **geographic data API** (contin
 
 | Page | Description |
 |---|---|
-| [Overview](grpc/README.md) | How gRPC mocking works in mockr |
+| [Overview](grpc/README.md) | How gRPC mocking works in apitwin |
 | [Quick Start](grpc/quick-start.md) | Get a gRPC mock server running in minutes |
 | [Configuration](grpc/config.md) | `[[grpc_routes]]` format, match patterns, status codes |
 | [Stubs & Conditions](grpc/stubs.md) | Stub format, conditions, proxy fallthrough |
 | [Persistence](grpc/persistence.md) | Directory-based CRUD for gRPC |
-| [Generation](grpc/generation.md) | `mockr generate --proto` workflow |
+| [Generation](grpc/generation.md) | `apitwin generate --proto` workflow |
 
 ## OpenAPI
 
@@ -70,7 +70,7 @@ All examples throughout this documentation use a **geographic data API** (contin
 
 ## Quick Links
 
-- [GitHub Repository](https://github.com/ridakaddir/mockr)
-- [Releases](https://github.com/ridakaddir/mockr/releases)
-- [npm Package](https://www.npmjs.com/package/@ridakaddir/mockr)
+- [GitHub Repository](https://github.com/ridakaddir/apitwin)
+- [Releases](https://github.com/ridakaddir/apitwin/releases)
+- [npm Package](https://www.npmjs.com/package/@ridakaddir/apitwin)
 - [License (MIT)](../LICENSE)

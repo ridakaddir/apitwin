@@ -1,7 +1,7 @@
 # gRPC mock — basic unary responses
 #
 # Run:
-#   mockr --config examples/grpc-mock --grpc-proto examples/grpc-mock/users.proto
+#   apitwin --config examples/grpc-mock --grpc-proto examples/grpc-mock/users.proto
 #
 # Try (requires grpcurl):
 #   grpcurl -plaintext -d '{"user_id":"1"}' localhost:50051 users.UserService/GetUser

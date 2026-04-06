@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * publish.js — Automates the npm release of mockr platform packages.
+ * publish.js — Automates the npm release of apitwin platform packages.
  *
  * This script:
  * 1. Downloads the Go binaries from a GitHub release
@@ -33,7 +33,7 @@ const { pipeline } = require("stream/promises");
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
-const REPO = "ridakaddir/mockr";
+const REPO = "ridakaddir/apitwin";
 const NPM_DIR = path.resolve(__dirname, "..");
 const MAX_REDIRECTS = 5;
 
@@ -45,39 +45,39 @@ const MAX_REDIRECTS = 5;
 const PLATFORM_MAP = {
   darwin_arm64: {
     dir: "darwin-arm64",
-    binary: "mockr",
+    binary: "apitwin",
     archiveType: "tar.gz",
   },
   darwin_amd64: {
     dir: "darwin-x64",
-    binary: "mockr",
+    binary: "apitwin",
     archiveType: "tar.gz",
   },
   linux_amd64: {
     dir: "linux-x64",
-    binary: "mockr",
+    binary: "apitwin",
     archiveType: "tar.gz",
   },
   linux_arm64: {
     dir: "linux-arm64",
-    binary: "mockr",
+    binary: "apitwin",
     archiveType: "tar.gz",
   },
   windows_amd64: {
     dir: "win32-x64",
-    binary: "mockr.exe",
+    binary: "apitwin.exe",
     archiveType: "zip",
   },
   windows_arm64: {
     dir: "win32-arm64",
-    binary: "mockr.exe",
+    binary: "apitwin.exe",
     archiveType: "zip",
   },
 };
 
 // All package directories (platform + main)
 const PLATFORM_DIRS = Object.values(PLATFORM_MAP).map((p) => p.dir);
-const ALL_PACKAGE_DIRS = [...PLATFORM_DIRS, "mockr"];
+const ALL_PACKAGE_DIRS = [...PLATFORM_DIRS, "apitwin"];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -142,7 +142,7 @@ function fetchWithRedirects(url) {
         https
           .get(
             redirectUrl,
-            { headers: { "User-Agent": "mockr-npm-publish" } },
+            { headers: { "User-Agent": "apitwin-npm-publish" } },
             handleResponse
           )
           .on("error", reject);
@@ -158,7 +158,7 @@ function fetchWithRedirects(url) {
       resolve(res);
     };
 
-    const headers = { "User-Agent": "mockr-npm-publish" };
+    const headers = { "User-Agent": "apitwin-npm-publish" };
     if (process.env.GITHUB_TOKEN) {
       headers.Authorization = `token ${process.env.GITHUB_TOKEN}`;
     }
@@ -240,7 +240,7 @@ async function main() {
     );
   }
 
-  log(`Publishing mockr v${version}${dryRun ? " (DRY RUN)" : ""}`);
+  log(`Publishing apitwin v${version}${dryRun ? " (DRY RUN)" : ""}`);
 
   // ── Step 1: Update version in all package.json files ──────────────────
 
@@ -252,7 +252,7 @@ async function main() {
     pkg.version = version;
 
     // Also update optionalDependencies versions in the main package
-    if (dir === "mockr" && pkg.optionalDependencies) {
+    if (dir === "apitwin" && pkg.optionalDependencies) {
       for (const dep of Object.keys(pkg.optionalDependencies)) {
         pkg.optionalDependencies[dep] = version;
       }
@@ -286,7 +286,7 @@ async function main() {
 
     for (const [platform, config] of Object.entries(PLATFORM_MAP)) {
       const ext = config.archiveType === "zip" ? "zip" : "tar.gz";
-      const archiveName = `mockr_${platform}.${ext}`;
+      const archiveName = `apitwin_${platform}.${ext}`;
       const archiveUrl = `https://github.com/${REPO}/releases/download/v${version}/${archiveName}`;
       const archivePath = path.join(tmpDir, archiveName);
       const binDir = path.join(NPM_DIR, config.dir, "bin");
@@ -330,12 +330,12 @@ async function main() {
 
       if (config.archiveType === "tar.gz") {
         exec(
-          `tar -xzf "${archivePath}" -C "${binDir}" --no-same-owner mockr`,
+          `tar -xzf "${archivePath}" -C "${binDir}" --no-same-owner apitwin`,
           { stdio: "pipe" }
         );
       } else {
         // Windows zip
-        exec(`unzip -o "${archivePath}" mockr.exe -d "${binDir}"`, {
+        exec(`unzip -o "${archivePath}" apitwin.exe -d "${binDir}"`, {
           stdio: "pipe",
         });
       }
@@ -349,7 +349,7 @@ async function main() {
       }
 
       // Ensure the binary is executable (non-Windows)
-      if (config.binary === "mockr") {
+      if (config.binary === "apitwin") {
         fs.chmodSync(binaryDest, 0o755);
       }
 
@@ -369,7 +369,7 @@ async function main() {
       .join(" ");
 
     for (const dir of PLATFORM_DIRS) {
-      const pkgName = `@ridakaddir/mockr-${dir}`;
+      const pkgName = `@ridakaddir/apitwin-${dir}`;
 
       // Skip if already published (prevents partial-publish failures)
       if (!dryRun && isPublished(pkgName, version)) {
@@ -391,12 +391,12 @@ async function main() {
 
     // ── Step 4: Publish main package ──────────────────────────────────────
 
-    const mainPkgName = "@ridakaddir/mockr";
+    const mainPkgName = "@ridakaddir/apitwin";
     if (!dryRun && isPublished(mainPkgName, version)) {
       log(`  ${mainPkgName}@${version} already published, skipping`);
     } else {
-      log("Publishing main package (@ridakaddir/mockr)...");
-      const mainPkgDir = path.join(NPM_DIR, "mockr");
+      log("Publishing main package (@ridakaddir/apitwin)...");
+      const mainPkgDir = path.join(NPM_DIR, "apitwin");
       const mainPublishFlags = [
         "--access public", // Scoped packages need --access public
         "--provenance",
@@ -407,7 +407,7 @@ async function main() {
       exec(`npm publish ${mainPublishFlags}`, { cwd: mainPkgDir });
     }
 
-    log(`\x1b[32mDone! Published mockr v${version} to npm.\x1b[0m`);
+    log(`\x1b[32mDone! Published apitwin v${version} to npm.\x1b[0m`);
 
     if (dryRun) {
       log("(This was a dry run — nothing was actually published.)");

@@ -387,10 +387,10 @@ Use operation IDs to track cascade mutations:
 
 ```bash
 # Search logs for specific operation
-grep "cascade-op-a1b2c3d4" mockr.log
+grep "cascade-op-a1b2c3d4" apitwin.log
 
 # Monitor cascade operations
-tail -f mockr.log | grep CASCADE
+tail -f apitwin.log | grep CASCADE
 ```
 
 ## Troubleshooting

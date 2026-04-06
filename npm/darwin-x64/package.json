@@ -1,14 +1,14 @@
 {
-  "name": "@ridakaddir/mockr-darwin-x64",
+  "name": "@ridakaddir/apitwin-darwin-x64",
   "version": "0.1.0",
-  "description": "mockr native binary for macOS x64 (Intel)",
+  "description": "apitwin native binary for macOS x64 (Intel)",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ridakaddir/mockr.git"
+    "url": "https://github.com/ridakaddir/apitwin.git"
   },
   "os": ["darwin"],
   "cpu": ["x64"],
-  "files": ["bin/mockr"],
+  "files": ["bin/apitwin"],
   "preferUnplugged": true
 }

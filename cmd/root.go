@@ -7,24 +7,24 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/ridakaddir/mockr/internal/config"
-	mockrgrpc "github.com/ridakaddir/mockr/internal/grpc"
-	"github.com/ridakaddir/mockr/internal/logger"
-	"github.com/ridakaddir/mockr/internal/proxy"
+	"github.com/ridakaddir/apitwin/internal/config"
+	apitwingrpc "github.com/ridakaddir/apitwin/internal/grpc"
+	"github.com/ridakaddir/apitwin/internal/logger"
+	"github.com/ridakaddir/apitwin/internal/proxy"
 	"github.com/spf13/cobra"
 )
 
 // defaultConfig resolves the config path to use when --config is not set:
-//   - "./mockr.toml" if it exists (single-file default)
-//   - "."            otherwise (load all config files in current directory)
+//   - "./apitwin.toml" if it exists (single-file default)
+//   - "."              otherwise (load all config files in current directory)
 func defaultConfig() string {
-	if _, err := os.Stat("mockr.toml"); err == nil {
-		return "mockr.toml"
+	if _, err := os.Stat("apitwin.toml"); err == nil {
+		return "apitwin.toml"
 	}
 	return "."
 }
 
-// version is set at build time via -ldflags "-X github.com/ridakaddir/mockr/cmd.version=<tag>"
+// version is set at build time via -ldflags "-X github.com/ridakaddir/apitwin/cmd.version=<tag>"
 // Falls back to "dev" for local builds without a tag.
 var version = "dev"
 
@@ -43,8 +43,8 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:     "mockr",
-	Short:   "mockr — mock, stub and proxy APIs for frontend development",
+	Use:     "apitwin",
+	Short:   "apitwin — mock, stub and proxy APIs for frontend development",
 	Version: version,
 	RunE:    run,
 }
@@ -59,10 +59,10 @@ func Execute() {
 func init() {
 	rootCmd.Flags().StringVarP(&target, "target", "t", "", "Upstream API URL to proxy unmatched requests to")
 	rootCmd.Flags().IntVarP(&port, "port", "p", 4000, "Port to listen on")
-	rootCmd.Flags().StringVarP(&configFile, "config", "c", "", "Config file or directory (default: mockr.toml if present, else current directory)")
+	rootCmd.Flags().StringVarP(&configFile, "config", "c", "", "Config file or directory (default: apitwin.toml if present, else current directory)")
 	rootCmd.Flags().StringVarP(&apiPrefix, "api-prefix", "a", "", "Strip this prefix from request paths before matching routes and forwarding to upstream (e.g. /api)")
 	rootCmd.Flags().BoolVar(&recordMode, "record", false, "Record mode: proxy all requests and save responses as stubs")
-	rootCmd.Flags().BoolVar(&initMode, "init", false, "Scaffold a mockr.toml template in the current directory")
+	rootCmd.Flags().BoolVar(&initMode, "init", false, "Scaffold an apitwin.toml template in the current directory")
 
 	// gRPC flags.
 	rootCmd.Flags().IntVar(&grpcPort, "grpc-port", 50051, "gRPC server port (only used when --grpc-proto is provided)")
@@ -76,12 +76,12 @@ func run(cmd *cobra.Command, args []string) error {
 		if err := proxy.Init("."); err != nil {
 			return fmt.Errorf("init failed: %w", err)
 		}
-		logger.Info("scaffolded mockr.toml and stubs/users.json")
-		logger.Info("run: mockr --target https://api.example.com")
+		logger.Info("scaffolded apitwin.toml and stubs/users.json")
+		logger.Info("run: apitwin --target https://api.example.com")
 		return nil
 	}
 
-	// Resolve config path: explicit flag > mockr.toml > current directory.
+	// Resolve config path: explicit flag > apitwin.toml > current directory.
 	cfg := configFile
 	if cfg == "" {
 		cfg = defaultConfig()
@@ -110,7 +110,7 @@ func run(cmd *cobra.Command, args []string) error {
 
 	// Start the gRPC server only when --grpc-proto is provided.
 	if len(grpcProtos) > 0 {
-		grpcSrv, err := mockrgrpc.NewServer(mockrgrpc.ServerOptions{
+		grpcSrv, err := apitwingrpc.NewServer(apitwingrpc.ServerOptions{
 			ProtoFiles: grpcProtos,
 			Target:     grpcTarget,
 			Port:       grpcPort,

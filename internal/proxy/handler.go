@@ -5,8 +5,8 @@ import (
 	"net/http/httputil"
 	"strings"
 
-	"github.com/ridakaddir/mockr/internal/config"
-	"github.com/ridakaddir/mockr/internal/logger"
+	"github.com/ridakaddir/apitwin/internal/config"
+	"github.com/ridakaddir/apitwin/internal/logger"
 )
 
 // Handler holds runtime state for the request dispatcher.

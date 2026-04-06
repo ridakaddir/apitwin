@@ -4,14 +4,14 @@
 
 ---
 
-mockr supports `.toml`, `.yaml`/`.yml`, and `.json` config files — auto-detected by file extension.
+apitwin supports `.toml`, `.yaml`/`.yml`, and `.json` config files — auto-detected by file extension.
 
 ## Single file
 
 Point `--config` at a file:
 
 ```sh
-mockr --config mockr.toml
+apitwin --config apitwin.toml
 ```
 
 ### Minimal example
@@ -41,10 +41,10 @@ fallback = "success"
 
 ## Directory config
 
-Point `--config` at a folder and mockr loads **all** config files in it, merging their routes in alphabetical order. Hot reload watches the whole directory — adding, editing, or removing any file takes effect immediately.
+Point `--config` at a folder and apitwin loads **all** config files in it, merging their routes in alphabetical order. Hot reload watches the whole directory — adding, editing, or removing any file takes effect immediately.
 
 ```sh
-mockr --config ./mocks
+apitwin --config ./mocks
 ```
 
 Split routes by domain for clarity:
@@ -62,9 +62,9 @@ Mix formats freely — TOML, YAML, and JSON can coexist in the same directory.
 
 ## Auto-detection
 
-If `--config` is not set, mockr:
+If `--config` is not set, apitwin:
 
-1. Looks for `mockr.toml` in the current directory
+1. Looks for `apitwin.toml` in the current directory
 2. Falls back to loading all config files in `.` if none is found
 
 ---

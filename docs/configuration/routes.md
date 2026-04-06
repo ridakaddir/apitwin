@@ -19,7 +19,7 @@
 
 ## Path matching
 
-mockr supports three path matching styles:
+apitwin supports three path matching styles:
 
 ### Exact match
 
@@ -74,7 +74,7 @@ See [Named Parameters](../features/named-parameters.md) for full details.
 
 ### Fallback
 
-When `fallback` is set, mockr serves that case when no [condition](../features/conditions.md) matches:
+When `fallback` is set, apitwin serves that case when no [condition](../features/conditions.md) matches:
 
 ```toml
 fallback = "success"    # serves the "success" case

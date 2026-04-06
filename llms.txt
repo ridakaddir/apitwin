@@ -1,7 +1,7 @@
-# mockr — AI Agent Skill
+# apitwin — AI Agent Skill
 
-> mockr is a fast, zero-dependency CLI tool for mocking, stubbing, and proxying HTTP and gRPC APIs.
-> Users install it via `npm install -D @ridakaddir/mockr` or download a binary.
+> apitwin is a fast, zero-dependency CLI tool for mocking, stubbing, and proxying HTTP and gRPC APIs.
+> Users install it via `npm install -D @ridakaddir/apitwin` or download a binary.
 > When a user asks you to create a mock API, generate mock config, or set up API stubs, use this reference.
 
 ---
@@ -41,43 +41,43 @@
 
 ```sh
 # npm (recommended)
-npm install -D @ridakaddir/mockr
+npm install -D @ridakaddir/apitwin
 
 # Binary (macOS ARM)
-curl -L https://github.com/ridakaddir/mockr/releases/latest/download/mockr_darwin_arm64.tar.gz | tar xz
-sudo mv mockr /usr/local/bin/
+curl -L https://github.com/ridakaddir/apitwin/releases/latest/download/apitwin_darwin_arm64.tar.gz | tar xz
+sudo mv apitwin /usr/local/bin/
 
 # Binary (macOS Intel)
-curl -L https://github.com/ridakaddir/mockr/releases/latest/download/mockr_darwin_amd64.tar.gz | tar xz
-sudo mv mockr /usr/local/bin/
+curl -L https://github.com/ridakaddir/apitwin/releases/latest/download/apitwin_darwin_amd64.tar.gz | tar xz
+sudo mv apitwin /usr/local/bin/
 
 # Binary (Linux x86-64)
-curl -L https://github.com/ridakaddir/mockr/releases/latest/download/mockr_linux_amd64.tar.gz | tar xz
-sudo mv mockr /usr/local/bin/
+curl -L https://github.com/ridakaddir/apitwin/releases/latest/download/apitwin_linux_amd64.tar.gz | tar xz
+sudo mv apitwin /usr/local/bin/
 
 # Go install (requires Go 1.25+)
-go install github.com/ridakaddir/mockr@latest
+go install github.com/ridakaddir/apitwin@latest
 ```
 
-Verify: `mockr --version`
+Verify: `apitwin --version`
 
 ---
 
 ## CLI REFERENCE
 
-### Root command: `mockr`
+### Root command: `apitwin`
 
 ```
-mockr [flags]
+apitwin [flags]
 ```
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
 | `--target <url>` | `-t` | | Upstream HTTP API to proxy unmatched requests to |
 | `--port <n>` | `-p` | `4000` | HTTP server port |
-| `--config <path>` | `-c` | `mockr.toml` or `.` | Config file or directory |
+| `--config <path>` | `-c` | `apitwin.toml` or `.` | Config file or directory |
 | `--api-prefix <path>` | `-a` | | Strip prefix before matching (e.g. `/api`) |
-| `--init` | | | Scaffold a `mockr.toml` template + `stubs/users.json` |
+| `--init` | | | Scaffold a `apitwin.toml` template + `stubs/users.json` |
 | `--record` | | | Record mode: proxy and save responses as stubs (requires `--target`) |
 | `--grpc-proto <file>` | | | Path to `.proto` file (repeatable; enables gRPC server) |
 | `--grpc-port <n>` | | `50051` | gRPC server port |
@@ -85,10 +85,10 @@ mockr [flags]
 | `--help` | `-h` | | |
 | `--version` | `-v` | | |
 
-### Subcommand: `mockr generate`
+### Subcommand: `apitwin generate`
 
 ```
-mockr generate [flags]
+apitwin generate [flags]
 ```
 
 **OpenAPI flags:**
@@ -113,27 +113,27 @@ mockr generate [flags]
 
 ## CONFIGURATION OVERVIEW
 
-mockr supports three config formats, auto-detected by file extension:
+apitwin supports three config formats, auto-detected by file extension:
 
 | Format | Extension | Example |
 |--------|-----------|---------|
-| TOML | `.toml` | `mockr.toml` |
-| YAML | `.yaml`, `.yml` | `mockr.yaml` |
-| JSON | `.json` | `mockr.json` |
+| TOML | `.toml` | `apitwin.toml` |
+| YAML | `.yaml`, `.yml` | `apitwin.yaml` |
+| JSON | `.json` | `apitwin.json` |
 
 ### Single file mode
 ```sh
-mockr --config mockr.toml
+apitwin --config apitwin.toml
 ```
 
 ### Directory mode
 ```sh
-mockr --config ./mocks
+apitwin --config ./mocks
 ```
 Loads ALL config files in the directory, merged alphabetically by filename. You can mix formats.
 
 ### Auto-detection (no `--config` flag)
-1. If `mockr.toml` exists in current directory, uses it
+1. If `apitwin.toml` exists in current directory, uses it
 2. Otherwise, loads all config files from current directory
 
 ### Config structure
@@ -603,7 +603,7 @@ fallback = "load"
 ```
 
 ### Fallback behavior
-If the resolved file doesn't exist, mockr falls through to the next matching condition or proxies to upstream.
+If the resolved file doesn't exist, apitwin falls through to the next matching condition or proxies to upstream.
 
 ### Security
 - `..` (directory traversal) is blocked
@@ -1034,7 +1034,7 @@ fallback = "create"
 - Multiple stages have cumulative durations
 - Requires at least 2 transitions (initial state + one deferred state)
 - **Shared timeline per route pattern** — the transition clock is shared across all resource IDs on the same route (e.g. `POST /api/model/A/config` and `POST /api/model/B/config` share one clock)
-- **Fallback on missing file** — if the transition clock has advanced to a terminal `update` case but the target file doesn't exist (new resource), mockr automatically falls back to the `fallback` case (e.g. `merge = "append"`) and creates the file normally
+- **Fallback on missing file** — if the transition clock has advanced to a terminal `update` case but the target file doesn't exist (new resource), apitwin automatically falls back to the `fallback` case (e.g. `merge = "append"`) and creates the file normally
 - **DELETE resets transitions** — when a DELETE route with `merge = "delete"` removes a resource, the transition clock for that match pattern is reset so subsequent POSTs start fresh
 - If the file is deleted before a background transition fires, the mutation is skipped (logged as a warning)
 
@@ -1060,10 +1060,10 @@ Proxy all requests to a real API and save responses as stubs for offline replay.
 
 ```sh
 # Record
-mockr --config ./mocks --target https://api.example.com --record
+apitwin --config ./mocks --target https://api.example.com --record
 
 # Replay (no target, no record)
-mockr --config ./mocks
+apitwin --config ./mocks
 ```
 
 **Behavior:**
@@ -1076,7 +1076,7 @@ mockr --config ./mocks
 
 ## CORS
 
-mockr automatically adds CORS headers to all responses:
+apitwin automatically adds CORS headers to all responses:
 - `Access-Control-Allow-Origin: *`
 - `Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS`
 - `Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin`
@@ -1088,7 +1088,7 @@ OPTIONS preflight requests are handled automatically. No configuration needed.
 
 ## HOT RELOAD
 
-mockr watches config files with `fsnotify`. Any change (edit, add, remove) to config files triggers instant reload.
+apitwin watches config files with `fsnotify`. Any change (edit, add, remove) to config files triggers instant reload.
 
 **What reloads:**
 - Route definitions
@@ -1100,7 +1100,7 @@ mockr watches config files with `fsnotify`. Any change (edit, add, remove) to co
 - Stub files — read fresh on every request
 
 ### Cross-reference dependency tracking
-When a persist operation (create/update/delete) modifies a stub file, mockr automatically detects if other routes reference that directory via `{{ref:...}}` and ensures subsequent reads return updated data. Changes are batched with 100ms debouncing.
+When a persist operation (create/update/delete) modifies a stub file, apitwin automatically detects if other routes reference that directory via `{{ref:...}}` and ensures subsequent reads return updated data. Changes are batched with 100ms debouncing.
 
 ---
 
@@ -1109,7 +1109,7 @@ When a persist operation (create/update/delete) modifies a stub file, mockr auto
 Strip a prefix from incoming request paths before matching routes and forwarding to upstream.
 
 ```sh
-mockr --config ./mocks --api-prefix /api
+apitwin --config ./mocks --api-prefix /api
 ```
 
 With `--api-prefix /api`:
@@ -1128,13 +1128,13 @@ match  = "/users"    # not /api/users
 
 ## GRPC REFERENCE
 
-mockr mocks unary gRPC methods from `.proto` files. No `protoc` or code generation required.
+apitwin mocks unary gRPC methods from `.proto` files. No `protoc` or code generation required.
 
 ### Starting gRPC server
 ```sh
-mockr --config ./mocks --grpc-proto service.proto
-mockr --config ./mocks --grpc-proto users.proto --grpc-proto orders.proto
-mockr --config ./mocks --grpc-proto service.proto --grpc-target localhost:9090
+apitwin --config ./mocks --grpc-proto service.proto
+apitwin --config ./mocks --grpc-proto users.proto --grpc-proto orders.proto
+apitwin --config ./mocks --grpc-proto service.proto --grpc-target localhost:9090
 ```
 
 ### gRPC route config
@@ -1266,20 +1266,20 @@ Identical to HTTP transitions. Both request-time and background modes work.
 
 ## OPENAPI GENERATION
 
-Generate a complete mockr config from any OpenAPI 3 spec.
+Generate a complete apitwin config from any OpenAPI 3 spec.
 
 ```sh
 # From local file
-mockr generate --spec openapi.yaml --out ./mocks
+apitwin generate --spec openapi.yaml --out ./mocks
 
 # From URL
-mockr generate --spec https://petstore3.swagger.io/api/v3/openapi.json --out ./mocks
+apitwin generate --spec https://petstore3.swagger.io/api/v3/openapi.json --out ./mocks
 
 # YAML format, single file
-mockr generate --spec openapi.yaml --format yaml --split=false
+apitwin generate --spec openapi.yaml --format yaml --split=false
 
 # Then serve
-mockr --config ./mocks
+apitwin --config ./mocks
 ```
 
 ### What gets generated
@@ -1316,19 +1316,19 @@ Generate gRPC mock config from `.proto` files.
 
 ```sh
 # Single proto
-mockr generate --proto service.proto --out ./mocks
+apitwin generate --proto service.proto --out ./mocks
 
 # Multiple protos
-mockr generate --proto users.proto --proto orders.proto --out ./mocks
+apitwin generate --proto users.proto --proto orders.proto --out ./mocks
 
 # With import paths
-mockr generate --proto service.proto --import-path ./vendor/protos --out ./mocks
+apitwin generate --proto service.proto --import-path ./vendor/protos --out ./mocks
 
 # YAML format
-mockr generate --proto service.proto --format yaml
+apitwin generate --proto service.proto --format yaml
 
 # Then serve
-mockr --config ./mocks --grpc-proto service.proto
+apitwin --config ./mocks --grpc-proto service.proto
 ```
 
 ### What gets generated
@@ -1346,21 +1346,21 @@ Same format-awareness as OpenAPI: `id` → `{{uuid}}`, `email` → `user@example
 ### 1. Scaffold and start (quickest start)
 
 ```sh
-mockr --init
-mockr
+apitwin --init
+apitwin
 ```
 
 ### 2. Generate from OpenAPI and serve
 
 ```sh
-mockr generate --spec openapi.yaml --out ./mocks
-mockr --config ./mocks
+apitwin generate --spec openapi.yaml --out ./mocks
+apitwin --config ./mocks
 ```
 
 ### 3. Selective mock with proxy fallthrough
 
 ```sh
-mockr --config ./mocks --target https://api.example.com
+apitwin --config ./mocks --target https://api.example.com
 ```
 
 Only routes defined in config are mocked. Everything else proxies to the real API.
@@ -1492,16 +1492,16 @@ fallback = "create"
 
 ```sh
 # Phase 1: Record real API
-mockr --config ./mocks --target https://api.example.com --record
+apitwin --config ./mocks --target https://api.example.com --record
 
 # Phase 2: Work offline
-mockr --config ./mocks
+apitwin --config ./mocks
 ```
 
 ### 8. HTTP + gRPC together
 
 ```sh
-mockr --config ./mocks --grpc-proto service.proto --target https://api.example.com --grpc-target localhost:9090
+apitwin --config ./mocks --grpc-proto service.proto --target https://api.example.com --grpc-target localhost:9090
 ```
 
 ### 9. Conditional responses for testing
@@ -1749,4 +1749,4 @@ routes:
 
 ---
 
-*This document is a complete reference for the mockr CLI tool. It ships with the `@ridakaddir/mockr` npm package at `node_modules/@ridakaddir/mockr/llms.txt`. For updates, see: https://github.com/ridakaddir/mockr*
+*This document is a complete reference for the apitwin CLI tool. It ships with the `@ridakaddir/apitwin` npm package at `node_modules/@ridakaddir/apitwin/llms.txt`. For updates, see: https://github.com/ridakaddir/apitwin*

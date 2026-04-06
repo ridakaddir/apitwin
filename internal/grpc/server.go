@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/ridakaddir/mockr/internal/config"
-	"github.com/ridakaddir/mockr/internal/logger"
+	"github.com/ridakaddir/apitwin/internal/config"
+	"github.com/ridakaddir/apitwin/internal/logger"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	v1reflectiongrpc "google.golang.org/grpc/reflection/grpc_reflection_v1"

@@ -6,11 +6,11 @@ export default defineConfig({
   markdown: {
     theme: 'github-dark-default'
   },
-  title: 'mockr',
+  title: 'apitwin',
   description: 'A fast, zero-dependency CLI tool for mocking, stubbing, and proxying HTTP and gRPC APIs',
-  base: '/mockr/',
+  base: '/apitwin/',
   head: [
-    ['link', { rel: 'icon', href: '/mockr/favicon.ico' }]
+    ['link', { rel: 'icon', href: '/apitwin/favicon.ico' }]
   ],
 
   themeConfig: {
@@ -95,8 +95,8 @@ export default defineConfig({
     ],
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/ridakaddir/mockr' },
-      { icon: 'npm', link: 'https://www.npmjs.com/package/@ridakaddir/mockr' }
+      { icon: 'github', link: 'https://github.com/ridakaddir/apitwin' },
+      { icon: 'npm', link: 'https://www.npmjs.com/package/@ridakaddir/apitwin' }
     ],
 
     search: {
@@ -104,7 +104,7 @@ export default defineConfig({
     },
 
     editLink: {
-      pattern: 'https://github.com/ridakaddir/mockr/edit/main/docs/:path'
+      pattern: 'https://github.com/ridakaddir/apitwin/edit/main/docs/:path'
     },
 
     footer: {

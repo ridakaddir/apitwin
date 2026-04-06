@@ -7,8 +7,8 @@ import (
 	"net/http/httputil"
 	"time"
 
-	"github.com/ridakaddir/mockr/internal/config"
-	"github.com/ridakaddir/mockr/internal/logger"
+	"github.com/ridakaddir/apitwin/internal/config"
+	"github.com/ridakaddir/apitwin/internal/logger"
 )
 
 // ServerOptions holds all runtime configuration for the proxy server.
@@ -97,7 +97,7 @@ func (s *Server) Start(ctx context.Context) error {
 		if prefixMsg == "" {
 			prefixMsg = "(none)"
 		}
-		logger.Info("mockr running",
+		logger.Info("apitwin running",
 			"port", s.opts.Port,
 			"config", s.opts.ConfigPath,
 			"routes", len(s.loader.Get().Routes),

@@ -13,7 +13,7 @@ This example demonstrates directory-based CRUD operations for gRPC services. Eac
 
 ```bash
 # Start the mock gRPC server
-mockr --config examples/grpc-directory-persist --grpc-proto examples/grpc-directory-persist/items.proto
+apitwin --config examples/grpc-directory-persist --grpc-proto examples/grpc-directory-persist/items.proto
 
 # The server listens on :50051 by default
 ```

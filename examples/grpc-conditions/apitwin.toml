@@ -5,7 +5,7 @@
 # The first matching condition wins; fallback is used when none match.
 #
 # Run:
-#   mockr --config examples/grpc-conditions \
+#   apitwin --config examples/grpc-conditions \
 #         --grpc-proto examples/grpc-conditions/orders.proto
 #
 # Try (requires grpcurl):

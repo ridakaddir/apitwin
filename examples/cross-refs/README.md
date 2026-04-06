@@ -109,7 +109,7 @@ Into:
 
 1. **Start the server:**
    ```bash
-   go run . serve -c examples/cross-refs/mockr.toml
+   go run . serve -c examples/cross-refs/apitwin.toml
    ```
 
 2. **Test the endpoints:**

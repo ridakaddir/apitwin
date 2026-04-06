@@ -1,0 +1,45 @@
+{
+  "name": "@ridakaddir/apitwin",
+  "version": "0.1.0",
+  "description": "A fast CLI tool to mock, stub, and proxy HTTP and gRPC APIs",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ridakaddir/apitwin.git"
+  },
+  "homepage": "https://github.com/ridakaddir/apitwin",
+  "bugs": {
+    "url": "https://github.com/ridakaddir/apitwin/issues"
+  },
+  "keywords": [
+    "mock",
+    "api",
+    "proxy",
+    "grpc",
+    "stub",
+    "dev-server",
+    "mock-server",
+    "api-mocking",
+    "http-mock",
+    "reverse-proxy"
+  ],
+  "bin": {
+    "apitwin": "bin/apitwin"
+  },
+  "files": [
+    "bin",
+    "README.md",
+    "llms.txt"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "optionalDependencies": {
+    "@ridakaddir/apitwin-darwin-arm64": "0.1.0",
+    "@ridakaddir/apitwin-darwin-x64": "0.1.0",
+    "@ridakaddir/apitwin-linux-x64": "0.1.0",
+    "@ridakaddir/apitwin-linux-arm64": "0.1.0",
+    "@ridakaddir/apitwin-win32-x64": "0.1.0",
+    "@ridakaddir/apitwin-win32-arm64": "0.1.0"
+  }
+}

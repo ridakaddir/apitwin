@@ -18,7 +18,7 @@ When generating from an OpenAPI spec, stubs are populated using the best availab
 
 ## Format hints
 
-When synthesising stubs from schema definitions, mockr uses format hints to produce realistic placeholder values:
+When synthesising stubs from schema definitions, apitwin uses format hints to produce realistic placeholder values:
 
 | Schema format | Synthesised value |
 |---|---|

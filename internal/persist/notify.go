@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/ridakaddir/mockr/internal/logger"
+	"github.com/ridakaddir/apitwin/internal/logger"
 )
 
 // ChangeType describes what happened to a stub file.

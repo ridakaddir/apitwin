@@ -111,7 +111,7 @@ fallback = "deleted"
 
 ## Key resolution for filenames
 
-When `merge = "append"`, the `key` field determines the filename. mockr resolves the value using this fallback chain:
+When `merge = "append"`, the `key` field determines the filename. apitwin resolves the value using this fallback chain:
 
 1. **Request body** — if the body contains the `key` field, that value is used as the filename
 2. **Defaults** — if a `defaults` file provides the `key` field (e.g. via `{{uuid}}`), that value is used
@@ -192,7 +192,7 @@ defaults = "stubs/defaults/country.json"
 
 **How it works:**
 
-1. mockr reads the defaults file and resolves [template tokens](template-tokens.md) (`{{uuid}}` becomes a real UUID, `{{now}}` becomes a timestamp)
+1. apitwin reads the defaults file and resolves [template tokens](template-tokens.md) (`{{uuid}}` becomes a real UUID, `{{now}}` becomes a timestamp)
 2. Deep-merges: defaults as the base, request body overlaid on top — **body always wins on conflicts**
 3. The merged result is saved to disk and returned as the response
 
@@ -227,7 +227,7 @@ defaults = "stubs/defaults/country-update.json"
 defaults = "stubs/defaults/{path.continent}.json"
 ```
 
-**Error handling:** If the defaults file is missing or contains invalid JSON, mockr logs a warning and proceeds with the original request body.
+**Error handling:** If the defaults file is missing or contains invalid JSON, apitwin logs a warning and proceeds with the original request body.
 
 ---
 
