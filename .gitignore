@@ -1,5 +1,5 @@
 # Binaries (Go build output at project root)
-/mockr
+/apitwin
 /mokr
 *.exe
 *.exe~
@@ -40,16 +40,16 @@ vendor/
 examples/record-mode/recorded.toml
 examples/record-mode/stubs/
 
-# openapi-generate example — generated output (regenerate with: mockr generate ...)
+# openapi-generate example — generated output (regenerate with: apitwin generate ...)
 examples/openapi-generate/mocks/
 examples/openapi-generate/mocks-yaml/
 examples/openapi-generate/mocks-single/
 
-# Any local mockr config and stubs at the project root (from --init runs)
-/mockr.toml
-/mockr.yaml
-/mockr.yml
-/mockr.json
+# Any local apitwin config and stubs at the project root (from --init runs)
+/apitwin.toml
+/apitwin.yaml
+/apitwin.yml
+/apitwin.json
 /stubs/
 
 # VitePress docs build output and dependencies

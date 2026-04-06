@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ridakaddir/mockr/internal/logger"
-	"github.com/ridakaddir/mockr/internal/persist"
+	"github.com/ridakaddir/apitwin/internal/logger"
+	"github.com/ridakaddir/apitwin/internal/persist"
 )
 
 // stubRefPattern matches {{ref:path...}} tokens in stub file content (outside

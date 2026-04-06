@@ -1,4 +1,4 @@
-module github.com/ridakaddir/mockr
+module github.com/ridakaddir/apitwin
 
 go 1.25.0
 

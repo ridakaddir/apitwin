@@ -37,7 +37,7 @@ stubs/
 }
 ```
 
-When a POST creates a new user, mockr:
+When a POST creates a new user, apitwin:
 1. Reads the defaults file and resolves template tokens (`{{uuid}}` becomes a real UUID, `{{now}}` becomes an ISO timestamp)
 2. Deep-merges defaults with the request body — **request body always wins** on conflicts
 3. Saves the merged result as the new file and returns it as the response
@@ -54,7 +54,7 @@ When a POST creates a new user, mockr:
 
 ```bash
 # Start the mock server
-mockr --config examples/directory-stubs
+apitwin --config examples/directory-stubs
 
 # List users (directory aggregation)
 curl http://localhost:4000/users

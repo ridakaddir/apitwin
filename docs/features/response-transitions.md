@@ -6,7 +6,7 @@
 
 Automatically advance resources through a sequence of states over time. Useful for simulating visa processing, city verification workflows, country admission pipelines, or any state machine.
 
-mockr supports two transition modes:
+apitwin supports two transition modes:
 
 | Mode | Defined on | Timer starts | File mutated? | Use case |
 |---|---|---|---|---|
@@ -177,7 +177,7 @@ t = 15s  background mutation → merges {"status": "verified"} into the file
 
 1. **POST** creates the resource → responds 201 with `"status": "pending"`
 2. **Background goroutine** sleeps for 15 seconds
-3. **After 15s**, mockr merges `{"status": "verified"}` into the file on disk
+3. **After 15s**, apitwin merges `{"status": "verified"}` into the file on disk
 4. **Any GET** (by ID or list) now returns `"status": "verified"`
 
 ### How it works
@@ -226,7 +226,7 @@ Transition state is tracked **per route pattern**, not per resource ID. This mea
 In practice, this is handled automatically:
 
 - **Background file mutations are per-file** — each POST spawns its own goroutines that mutate the correct file, regardless of the shared clock
-- **Fallback on missing file** — if the transition clock has advanced to a terminal case (e.g. `verified` with `merge = "update"`) but the target file doesn't exist (because this is a new resource), mockr automatically falls back to the `fallback` case (e.g. `created` with `merge = "append"`) and creates the file normally
+- **Fallback on missing file** — if the transition clock has advanced to a terminal case (e.g. `verified` with `merge = "update"`) but the target file doesn't exist (because this is a new resource), apitwin automatically falls back to the `fallback` case (e.g. `created` with `merge = "append"`) and creates the file normally
 
 This means you can create multiple resources at any time without worrying about the transition clock:
 
@@ -234,7 +234,7 @@ This means you can create multiple resources at any time without worrying about 
 t = 0s    POST /cities (body: {name: "Casablanca"})  → 201 (created)
 t = 15s   background mutation                         → file updated to "verified"
 t = 20s   POST /cities (body: {name: "Berlin"})       → 201 (created, not 404)
-          ↑ transition clock is past "pending", but mockr detects the file
+          ↑ transition clock is past "pending", but apitwin detects the file
             doesn't exist and uses the fallback "created" case
 ```
 

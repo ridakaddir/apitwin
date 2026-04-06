@@ -1,19 +1,19 @@
 # Record mode example — proxy a real API and auto-save responses as stubs
 #
-# --api-prefix /api  tells mockr to:
+# --api-prefix /api  tells apitwin to:
 #   - accept requests at http://localhost:4000/api/*
 #   - strip /api before forwarding to the upstream
 #
 # So your frontend calls /api/posts and the upstream receives /posts.
 #
 # Run:
-#   mockr --config examples/record-mode \
+#   apitwin --config examples/record-mode \
 #         --target https://jsonplaceholder.typicode.com \
 #         --api-prefix /api \
 #         --record
 #
 # Or using the directory as config (same thing since this is the only file):
-#   mockr --config examples/record-mode/mockr.toml \
+#   apitwin --config examples/record-mode/apitwin.toml \
 #         --target https://jsonplaceholder.typicode.com \
 #         --api-prefix /api \
 #         --record
@@ -29,6 +29,6 @@
 #
 # Serve fully offline after recording (no --record, no --target needed):
 #
-#   mockr --config examples/record-mode --api-prefix /api
+#   apitwin --config examples/record-mode --api-prefix /api
 
 # Routes are appended here automatically during --record mode.

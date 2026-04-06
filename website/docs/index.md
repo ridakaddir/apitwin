@@ -2,12 +2,12 @@
 layout: home
 
 hero:
-  name: mockr
+  name: apitwin
   text: Mock, stub, and proxy APIs
   tagline: A fast, zero-dependency CLI tool for developers to mock, stub, and proxy HTTP and gRPC APIs — written in Go.
   image:
     src: /logo.svg
-    alt: mockr
+    alt: apitwin
   actions:
     - theme: brand
       text: Get Started
@@ -17,12 +17,12 @@ hero:
       link: /quick-start
     - theme: alt
       text: View on GitHub
-      link: https://github.com/ridakaddir/mockr
+      link: https://github.com/ridakaddir/apitwin
 
 features:
   - icon: ⚡
     title: Zero Dependencies
-    details: No external dependencies on your app. Just point your frontend or service at mockr instead of the real API.
+    details: No external dependencies on your app. Just point your frontend or service at apitwin instead of the real API.
 
   - icon: 🔄
     title: Instant Hot Reload

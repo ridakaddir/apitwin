@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/ridakaddir/mockr/internal/config"
-	"github.com/ridakaddir/mockr/internal/logger"
-	"github.com/ridakaddir/mockr/internal/persist"
+	"github.com/ridakaddir/apitwin/internal/config"
+	"github.com/ridakaddir/apitwin/internal/logger"
+	"github.com/ridakaddir/apitwin/internal/persist"
 )
 
 // serveMock writes a mock response for the given case to w.

@@ -10,10 +10,10 @@ The fastest way to start is to generate config and stubs from a `.proto` file:
 
 ```sh
 # Generate config and stubs
-mockr generate --proto geo.proto --out ./mocks
+apitwin generate --proto geo.proto --out ./mocks
 
 # Start HTTP (port 4000) + gRPC (port 50051)
-mockr --config ./mocks --grpc-proto geo.proto
+apitwin --config ./mocks --grpc-proto geo.proto
 ```
 
 ## With upstream proxy
@@ -21,14 +21,14 @@ mockr --config ./mocks --grpc-proto geo.proto
 Stub only the methods you care about — forward everything else to a real gRPC server:
 
 ```sh
-mockr --config ./mocks \
+apitwin --config ./mocks \
       --grpc-proto geo.proto \
       --grpc-target localhost:9090
 ```
 
 ## Inspect with grpcurl
 
-mockr includes built-in [server reflection](https://grpc.github.io/grpc/core/md_doc_server_reflection_tutorial.html), so `grpcurl`, `grpc-ui`, and other tools work without specifying a proto file:
+apitwin includes built-in [server reflection](https://grpc.github.io/grpc/core/md_doc_server_reflection_tutorial.html), so `grpcurl`, `grpc-ui`, and other tools work without specifying a proto file:
 
 ```sh
 # List all services
@@ -51,4 +51,4 @@ grpcurl -plaintext -d '{"country_code":"morocco"}' localhost:50051 geo.CountrySe
 - [Configuration](config.md) — `[[grpc_routes]]` format and match patterns
 - [Stubs & Conditions](stubs.md) — stub format, condition routing, proxy fallthrough
 - [Persistence](persistence.md) — directory-based CRUD for gRPC
-- [Generation](generation.md) — `mockr generate --proto` in detail
+- [Generation](generation.md) — `apitwin generate --proto` in detail

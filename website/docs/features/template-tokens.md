@@ -4,7 +4,7 @@
 
 ---
 
-mockr supports template tokens in inline JSON values, file-based stubs, directory aggregations, and defaults files. Tokens are replaced with generated values or referenced data at request time.
+apitwin supports template tokens in inline JSON values, file-based stubs, directory aggregations, and defaults files. Tokens are replaced with generated values or referenced data at request time.
 
 ## Available tokens
 

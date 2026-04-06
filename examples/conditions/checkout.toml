@@ -1,7 +1,7 @@
 # Checkout endpoint — conditions on body field, query param, and header
 #
 # Run:
-#   mockr --config examples/conditions
+#   apitwin --config examples/conditions
 #
 # Try:
 #   # VIP user (body condition → discounted total)

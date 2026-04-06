@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ridakaddir/mockr/internal/config"
-	"github.com/ridakaddir/mockr/internal/logger"
-	"github.com/ridakaddir/mockr/internal/persist"
+	"github.com/ridakaddir/apitwin/internal/config"
+	"github.com/ridakaddir/apitwin/internal/logger"
+	"github.com/ridakaddir/apitwin/internal/persist"
 	"google.golang.org/grpc/codes"
 )
 

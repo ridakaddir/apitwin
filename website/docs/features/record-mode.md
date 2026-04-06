@@ -9,7 +9,7 @@ Record mode proxies all requests to a real API, saves each response as a stub fi
 ## Usage
 
 ```sh
-mockr --config ./mocks \
+apitwin --config ./mocks \
       --target https://restcountries.com/v3.1 \
       --api-prefix /api \
       --record
@@ -36,7 +36,7 @@ Request 2  →  via=stub    (local file, <1ms)
 After recording, serve without a network connection:
 
 ```sh
-mockr --config ./mocks --api-prefix /api
+apitwin --config ./mocks --api-prefix /api
 ```
 
 No `--target` and no `--record` — everything is served from the recorded stubs.

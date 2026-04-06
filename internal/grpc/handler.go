@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ridakaddir/mockr/internal/config"
-	"github.com/ridakaddir/mockr/internal/logger"
-	"github.com/ridakaddir/mockr/internal/persist"
+	"github.com/ridakaddir/apitwin/internal/config"
+	"github.com/ridakaddir/apitwin/internal/logger"
+	"github.com/ridakaddir/apitwin/internal/persist"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -74,7 +74,7 @@ func (h *handler) serve(srv interface{}, stream grpc.ServerStream) error {
 	// Guard against streaming RPCs — only unary is supported.
 	if md != nil && (md.IsClientStreaming() || md.IsServerStreaming()) {
 		return status.Errorf(codes.Unimplemented,
-			"mockr does not yet support streaming RPCs (%s)", fullMethod)
+			"apitwin does not yet support streaming RPCs (%s)", fullMethod)
 	}
 
 	// Decode request to a map for condition evaluation.

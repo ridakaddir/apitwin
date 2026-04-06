@@ -903,11 +903,11 @@ func TestResolveSpreadRefs_NestedSpread(t *testing.T) {
 
 func TestResolveSpreadRefs_IntegrationUseCase(t *testing.T) {
 	// Integration test for user's exact use case
-	// This simulates the complete mockr-config structure and workflow
+	// This simulates the complete apitwin-config structure and workflow
 
 	tempDir := t.TempDir()
 
-	// Create mockr-config-like structure
+	// Create apitwin-config-like structure
 	stubsDir := filepath.Join(tempDir, "stubs")
 	endpointsDir := filepath.Join(stubsDir, "endpoints")
 	deploymentsDir := filepath.Join(stubsDir, "deployments")

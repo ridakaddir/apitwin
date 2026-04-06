@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ridakaddir/mockr/internal/config"
-	"github.com/ridakaddir/mockr/internal/logger"
+	"github.com/ridakaddir/apitwin/internal/config"
+	"github.com/ridakaddir/apitwin/internal/logger"
 )
 
 // routeLoader is the subset of config.Loader used by recorder.
@@ -183,10 +183,10 @@ fallback = %q
 	}
 }
 
-// initTemplate returns the content of a starter mockr.toml file.
+// initTemplate returns the content of a starter apitwin.toml file.
 func initTemplate() string {
-	return `# mockr configuration
-# Run: mockr --target https://api.example.com
+	return `# apitwin configuration
+# Run: apitwin --target https://api.example.com
 
 [[routes]]
 method   = "GET"
@@ -272,20 +272,20 @@ func initStubTemplate() string {
 `
 }
 
-// Init writes mockr.toml and stubs/users.json to the given directory.
+// Init writes apitwin.toml and stubs/users.json to the given directory.
 func Init(dir string) error {
 	return writeInitFiles(dir)
 }
 
-// writeInitFiles writes mockr.toml and stubs/users.json to the given directory.
+// writeInitFiles writes apitwin.toml and stubs/users.json to the given directory.
 func writeInitFiles(dir string) error {
-	configPath := filepath.Join(dir, "mockr.toml")
+	configPath := filepath.Join(dir, "apitwin.toml")
 	if _, err := os.Stat(configPath); err == nil {
-		return fmt.Errorf("mockr.toml already exists — remove it first or edit it directly")
+		return fmt.Errorf("apitwin.toml already exists — remove it first or edit it directly")
 	}
 
 	if err := os.WriteFile(configPath, []byte(initTemplate()), 0644); err != nil {
-		return fmt.Errorf("writing mockr.toml: %w", err)
+		return fmt.Errorf("writing apitwin.toml: %w", err)
 	}
 
 	stubsDir := filepath.Join(dir, "stubs")

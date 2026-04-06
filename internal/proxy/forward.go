@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/ridakaddir/mockr/internal/logger"
+	"github.com/ridakaddir/apitwin/internal/logger"
 )
 
 // newReverseProxy creates a reverse proxy that forwards requests to target.

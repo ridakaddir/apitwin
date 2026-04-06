@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ridakaddir/mockr/internal/config"
+	"github.com/ridakaddir/apitwin/internal/config"
 )
 
 // transitionState tracks the first-request timestamp for each route that has

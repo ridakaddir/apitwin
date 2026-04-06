@@ -9,13 +9,13 @@ Scaffold a complete `[[grpc_routes]]` config and synthetic stub files from a `.p
 ## Usage
 
 ```sh
-mockr generate --proto geo.proto --out ./mocks
+apitwin generate --proto geo.proto --out ./mocks
 
 # Multiple proto files
-mockr generate --proto countries.proto --proto cities.proto --out ./mocks
+apitwin generate --proto countries.proto --proto cities.proto --out ./mocks
 
 # With extra import paths for proto imports
-mockr generate --proto geo.proto --import-path ./vendor/protos --format yaml
+apitwin generate --proto geo.proto --import-path ./vendor/protos --format yaml
 ```
 
 ---
@@ -26,7 +26,7 @@ For a `CountryService` with three methods:
 
 ```
 mocks/
-├── mockr.toml            # [[grpc_routes]] for all methods
+├── apitwin.toml            # [[grpc_routes]] for all methods
 └── stubs/
     ├── CountryService_GetCountry.json
     ├── CountryService_ListCountries.json
@@ -68,7 +68,7 @@ Stubs are synthesised from the output message descriptor — field names, types,
 After generating, start the server:
 
 ```sh
-mockr --config ./mocks --grpc-proto geo.proto
+apitwin --config ./mocks --grpc-proto geo.proto
 ```
 
 ---

@@ -1,7 +1,7 @@
 # Product detail endpoint — wildcard path match
 #
 # Run:
-#   mockr --config examples/basic
+#   apitwin --config examples/basic
 #
 # Try:
 #   http :4000/api/products/1

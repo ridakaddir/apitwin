@@ -8,19 +8,19 @@ const { execFileSync } = require("child_process");
  * Platform-specific package mapping.
  *
  * Maps Node.js process.platform + process.arch to the corresponding
- * @mockr/* npm package that contains the native binary.
+ * @apitwin/* npm package that contains the native binary.
  */
 const PLATFORMS = {
-  "darwin arm64": "@ridakaddir/mockr-darwin-arm64",
-  "darwin x64": "@ridakaddir/mockr-darwin-x64",
-  "linux x64": "@ridakaddir/mockr-linux-x64",
-  "linux arm64": "@ridakaddir/mockr-linux-arm64",
-  "win32 x64": "@ridakaddir/mockr-win32-x64",
-  "win32 arm64": "@ridakaddir/mockr-win32-arm64",
+  "darwin arm64": "@ridakaddir/apitwin-darwin-arm64",
+  "darwin x64": "@ridakaddir/apitwin-darwin-x64",
+  "linux x64": "@ridakaddir/apitwin-linux-x64",
+  "linux arm64": "@ridakaddir/apitwin-linux-arm64",
+  "win32 x64": "@ridakaddir/apitwin-win32-x64",
+  "win32 arm64": "@ridakaddir/apitwin-win32-arm64",
 };
 
 /**
- * Resolves the path to the native mockr binary for the current platform.
+ * Resolves the path to the native apitwin binary for the current platform.
  */
 function getBinaryPath() {
   const platformKey = `${process.platform} ${process.arch}`;
@@ -33,15 +33,15 @@ function getBinaryPath() {
 
     console.error(
       `Error: Unsupported platform: ${process.platform} ${process.arch}\n\n` +
-        `mockr currently supports:\n${supported}\n\n` +
+        `apitwin currently supports:\n${supported}\n\n` +
         `If you need support for this platform, please open an issue:\n` +
-        `https://github.com/ridakaddir/mockr/issues`
+        `https://github.com/ridakaddir/apitwin/issues`
     );
     process.exit(1);
   }
 
-  // Determine the binary name (mockr.exe on Windows, mockr elsewhere)
-  const binaryName = process.platform === "win32" ? "mockr.exe" : "mockr";
+  // Determine the binary name (apitwin.exe on Windows, apitwin elsewhere)
+  const binaryName = process.platform === "win32" ? "apitwin.exe" : "apitwin";
 
   try {
     // Resolve the binary from the platform-specific package
@@ -52,13 +52,13 @@ function getBinaryPath() {
     if (process.platform === "win32") {
       fallback =
         `  Download the latest release from:\n` +
-        `  https://github.com/ridakaddir/mockr/releases/latest`;
+        `  https://github.com/ridakaddir/apitwin/releases/latest`;
     } else {
       const os = process.platform === "darwin" ? "darwin" : "linux";
       const arch = process.arch === "x64" ? "amd64" : process.arch;
       fallback =
-        `  curl -L https://github.com/ridakaddir/mockr/releases/latest/download/mockr_${os}_${arch}.tar.gz | tar xz\n` +
-        `  sudo mv mockr /usr/local/bin/`;
+        `  curl -L https://github.com/ridakaddir/apitwin/releases/latest/download/apitwin_${os}_${arch}.tar.gz | tar xz\n` +
+        `  sudo mv apitwin /usr/local/bin/`;
     }
 
     console.error(
@@ -66,8 +66,8 @@ function getBinaryPath() {
         `This usually means your package manager failed to install the\n` +
         `optional dependency for your platform (${process.platform} ${process.arch}).\n\n` +
         `Try reinstalling:\n` +
-        `  npm install -D @ridakaddir/mockr\n\n` +
-        `If the problem persists, you can install mockr directly:\n` +
+        `  npm install -D @ridakaddir/apitwin\n\n` +
+        `If the problem persists, you can install apitwin directly:\n` +
         fallback
     );
     process.exit(1);
@@ -96,7 +96,7 @@ try {
   }
 
   // If the binary couldn't be executed at all, report the error
-  console.error(`Error: Failed to execute mockr binary at ${binaryPath}`);
+  console.error(`Error: Failed to execute apitwin binary at ${binaryPath}`);
   console.error(e.message);
   process.exit(1);
 }

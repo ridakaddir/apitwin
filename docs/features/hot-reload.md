@@ -4,11 +4,11 @@
 
 ---
 
-mockr watches the config file or directory for changes using filesystem notifications. Edit a case, change a `fallback`, or drop a new `.toml` file into the config directory — the next request picks up the changes with no restart.
+apitwin watches the config file or directory for changes using filesystem notifications. Edit a case, change a `fallback`, or drop a new `.toml` file into the config directory — the next request picks up the changes with no restart.
 
 ## How it works
 
-- mockr uses `fsnotify` to watch all config files
+- apitwin uses `fsnotify` to watch all config files
 - When a file change is detected, the config is reloaded before the next request
 - No server restart, no connection drops, no downtime
 
@@ -21,7 +21,7 @@ mockr watches the config file or directory for changes using filesystem notifica
 
 ## Cross-reference dependency tracking
 
-mockr automatically tracks **cross-reference dependencies** between stub files. When a stub file contains a `{{ref:...}}` token that points to a directory, mockr monitors that directory for changes and ensures dependent data stays up to date.
+apitwin automatically tracks **cross-reference dependencies** between stub files. When a stub file contains a `{{ref:...}}` token that points to a directory, apitwin monitors that directory for changes and ensures dependent data stays up to date.
 
 **Example:** A continent file references its countries:
 
@@ -32,11 +32,11 @@ mockr automatically tracks **cross-reference dependencies** between stub files. 
 }
 ```
 
-When a country is created, updated, or deleted in `stubs/countries/`, mockr detects the change and the next GET on the continent returns the updated `countries` array — no restart needed.
+When a country is created, updated, or deleted in `stubs/countries/`, apitwin detects the change and the next GET on the continent returns the updated `countries` array — no restart needed.
 
 ### How it works
 
-1. On startup, mockr scans all stub files for `{{ref:...}}` tokens pointing to directories
+1. On startup, apitwin scans all stub files for `{{ref:...}}` tokens pointing to directories
 2. It builds a dependency map: which stub files depend on which directories
 3. When a persist operation (create, update, delete) modifies a file in a tracked directory, the change is detected
 4. Rapid changes are batched (100ms window) to avoid redundant processing
@@ -51,14 +51,14 @@ When a country is created, updated, or deleted in `stubs/countries/`, mockr dete
 
 ## Terminal output
 
-mockr logs indicate where each response comes from:
+apitwin logs indicate where each response comes from:
 
 ```
 via=stub   — response served from a local mock file
 via=proxy  — response forwarded to the upstream API
 ```
 
-When cross-reference dependencies change, mockr logs the update:
+When cross-reference dependencies change, apitwin logs the update:
 
 ```
 INFO stub watcher: dependencies changed directories=1 affected_files=2

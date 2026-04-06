@@ -12,7 +12,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/ridakaddir/mockr/internal/persist"
+	"github.com/ridakaddir/apitwin/internal/persist"
 )
 
 // refPattern matches "{{ref:path?params}}" tokens (including surrounding quotes)

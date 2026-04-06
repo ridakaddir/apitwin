@@ -1,7 +1,7 @@
 # Orders endpoint — conditions on nested body fields (dot-notation)
 #
 # Run:
-#   mockr --config examples/conditions
+#   apitwin --config examples/conditions
 #
 # Try:
 #   # Pay with crypto → 202 pending

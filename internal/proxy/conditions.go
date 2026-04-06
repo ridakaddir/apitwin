@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/ridakaddir/mockr/internal/config"
+	"github.com/ridakaddir/apitwin/internal/config"
 )
 
 // evalCondition checks whether a single condition matches the request.

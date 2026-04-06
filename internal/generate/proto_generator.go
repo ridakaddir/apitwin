@@ -112,7 +112,7 @@ func RunProto(opts ProtoOptions) (*ProtoResult, error) {
 	switch opts.Format {
 	case "yaml":
 		content := buildGRPCRoutesYAML(routes, opts.ProtoFiles)
-		cfgPath = filepath.Join(opts.OutDir, "mockr.yaml")
+		cfgPath = filepath.Join(opts.OutDir, "apitwin.yaml")
 		if err := os.WriteFile(cfgPath, []byte(content), 0644); err != nil {
 			return nil, fmt.Errorf("writing config: %w", err)
 		}
@@ -121,13 +121,13 @@ func RunProto(opts ProtoOptions) (*ProtoResult, error) {
 		if err != nil {
 			return nil, err
 		}
-		cfgPath = filepath.Join(opts.OutDir, "mockr.json")
+		cfgPath = filepath.Join(opts.OutDir, "apitwin.json")
 		if err := os.WriteFile(cfgPath, content, 0644); err != nil {
 			return nil, fmt.Errorf("writing config: %w", err)
 		}
 	default: // toml
 		content := buildGRPCRoutesTOML(routes, opts.ProtoFiles)
-		cfgPath = filepath.Join(opts.OutDir, "mockr.toml")
+		cfgPath = filepath.Join(opts.OutDir, "apitwin.toml")
 		if err := os.WriteFile(cfgPath, []byte(content), 0644); err != nil {
 			return nil, fmt.Errorf("writing config: %w", err)
 		}

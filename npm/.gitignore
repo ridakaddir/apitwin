@@ -1,10 +1,10 @@
 # Native binaries — downloaded at publish time, not committed
-darwin-arm64/bin/mockr
-darwin-x64/bin/mockr
-linux-x64/bin/mockr
-linux-arm64/bin/mockr
-win32-x64/bin/mockr.exe
-win32-arm64/bin/mockr.exe
+darwin-arm64/bin/apitwin
+darwin-x64/bin/apitwin
+linux-x64/bin/apitwin
+linux-arm64/bin/apitwin
+win32-x64/bin/apitwin.exe
+win32-arm64/bin/apitwin.exe
 
 # Temporary download directory
 .tmp/

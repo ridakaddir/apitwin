@@ -1,7 +1,7 @@
 {
-  "name": "@ridakaddir/mockr-docs",
+  "name": "@ridakaddir/apitwin-docs",
   "version": "1.0.0",
-  "description": "Documentation site for mockr - A fast, zero-dependency CLI tool for mocking, stubbing, and proxying HTTP and gRPC APIs",
+  "description": "Documentation site for apitwin - A fast, zero-dependency CLI tool for mocking, stubbing, and proxying HTTP and gRPC APIs",
   "private": true,
   "type": "module",
   "scripts": {

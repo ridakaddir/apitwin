@@ -77,7 +77,7 @@ func Write(groups map[string][]Operation, opts WriteOptions) (*WriteResult, erro
 	// Write config files.
 	if opts.Format == "json" {
 		// JSON: single file always, full array structure.
-		cfgPath := filepath.Join(opts.OutDir, "mockr.json")
+		cfgPath := filepath.Join(opts.OutDir, "apitwin.json")
 		content, err := buildJSONConfig(groups)
 		if err != nil {
 			return nil, err
@@ -106,7 +106,7 @@ func Write(groups map[string][]Operation, opts WriteOptions) (*WriteResult, erro
 		for _, tag := range tags {
 			all.WriteString(tagRoutes[tag])
 		}
-		cfgPath := filepath.Join(opts.OutDir, "mockr."+ext)
+		cfgPath := filepath.Join(opts.OutDir, "apitwin."+ext)
 		if err := os.WriteFile(cfgPath, []byte(all.String()), 0644); err != nil {
 			return nil, fmt.Errorf("writing config %s: %w", cfgPath, err)
 		}

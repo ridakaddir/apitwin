@@ -4,11 +4,11 @@
 
 ---
 
-Generate a complete mockr config directory from an OpenAPI 3 spec in one command. Works with local files and remote URLs.
+Generate a complete apitwin config directory from an OpenAPI 3 spec in one command. Works with local files and remote URLs.
 
 ```sh
-mockr generate --spec openapi.yaml --out ./mocks
-mockr --config ./mocks
+apitwin generate --spec openapi.yaml --out ./mocks
+apitwin --config ./mocks
 ```
 
 Your mock server is running with routes for every operation in the spec — no editing required.

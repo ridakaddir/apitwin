@@ -6,7 +6,7 @@
 
 Automatically advance resources through a sequence of states over time. Useful for simulating visa processing, city verification workflows, country admission pipelines, or any state machine.
 
-mockr supports two transition modes:
+apitwin supports two transition modes:
 
 | Mode | Defined on | Timer starts | File mutated? | Use case |
 |---|---|---|---|---|
@@ -177,7 +177,7 @@ t = 15s  background mutation → merges {"status": "verified"} into the file
 
 1. **POST** creates the resource → responds 201 with `"status": "pending"`
 2. **Background goroutine** sleeps for 15 seconds
-3. **After 15s**, mockr merges `{"status": "verified"}` into the file on disk
+3. **After 15s**, apitwin merges `{"status": "verified"}` into the file on disk
 4. **Any GET** (by ID or list) now returns `"status": "verified"`
 
 ### How it works

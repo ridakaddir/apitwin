@@ -8,19 +8,19 @@
 
 ```sh
 # From a local file
-mockr generate --spec openapi.yaml --out ./mocks
+apitwin generate --spec openapi.yaml --out ./mocks
 
 # From a remote URL
-mockr generate --spec https://petstore3.swagger.io/api/v3/openapi.json --out ./mocks
+apitwin generate --spec https://petstore3.swagger.io/api/v3/openapi.json --out ./mocks
 
 # YAML format, single file instead of one per tag
-mockr generate --spec openapi.yaml --format yaml --split=false
+apitwin generate --spec openapi.yaml --format yaml --split=false
 ```
 
 Then serve immediately:
 
 ```sh
-mockr --config ./mocks
+apitwin --config ./mocks
 ```
 
 ---
@@ -31,7 +31,7 @@ For each path + operation in the spec:
 
 - **One config file per tag** (e.g. `countries.toml`, `cities.toml`) containing one route per operation
 - **One stub JSON file per response status code** in `stubs/`
-- OpenAPI path parameters (`{id}`) are converted to mockr wildcards (`*`)
+- OpenAPI path parameters (`{id}`) are converted to apitwin wildcards (`*`)
 - The first 2xx response is set as the route `fallback`
 
 ---

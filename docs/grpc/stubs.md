@@ -74,7 +74,7 @@ See [Conditions](../features/conditions.md) for the full operator reference.
 
 ## Proxy fallthrough
 
-When a gRPC route has no matching condition and no `fallback`, mockr forwards the call to `--grpc-target`. This lets you stub only the methods you care about:
+When a gRPC route has no matching condition and no `fallback`, apitwin forwards the call to `--grpc-target`. This lets you stub only the methods you care about:
 
 ```toml
 # ListCities is mocked for Morocco only; all other countries are proxied

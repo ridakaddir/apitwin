@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ridakaddir/mockr/internal/generate"
+	"github.com/ridakaddir/apitwin/internal/generate"
 	"github.com/spf13/cobra"
 )
 
@@ -21,20 +21,20 @@ var (
 
 var generateCmd = &cobra.Command{
 	Use:   "generate",
-	Short: "Generate a mockr config from an OpenAPI spec or .proto files",
+	Short: "Generate an apitwin config from an OpenAPI spec or .proto files",
 	Long: `Generate reads an OpenAPI 3 spec (file or URL) or .proto files and produces:
-  - A mockr config file (TOML/YAML/JSON) with one route per operation/method
+  - A apitwin config file (TOML/YAML/JSON) with one route per operation/method
   - Stub JSON files in stubs/ populated from spec examples or synthesised from schemas
 
 OpenAPI examples:
-  mockr generate --spec openapi.yaml --out ./mocks
-  mockr generate --spec https://petstore3.swagger.io/api/v3/openapi.json --out ./mocks
-  mockr generate --spec openapi.yaml --format yaml --split=false
+  apitwin generate --spec openapi.yaml --out ./mocks
+  apitwin generate --spec https://petstore3.swagger.io/api/v3/openapi.json --out ./mocks
+  apitwin generate --spec openapi.yaml --format yaml --split=false
 
 Proto examples:
-  mockr generate --proto service.proto --out ./mocks
-  mockr generate --proto users.proto --proto orders.proto --out ./mocks
-  mockr generate --proto service.proto --import-path ./vendor/protos --format yaml`,
+  apitwin generate --proto service.proto --out ./mocks
+  apitwin generate --proto users.proto --proto orders.proto --out ./mocks
+  apitwin generate --proto service.proto --import-path ./vendor/protos --format yaml`,
 	RunE: runGenerate,
 }
 
@@ -88,7 +88,7 @@ func runGenerateOpenAPI() error {
 		fmt.Printf("  %s\n", f)
 	}
 	fmt.Printf("\nStub files written to: %s/stubs/\n", genOut)
-	fmt.Printf("\nRun: mockr --config %s\n", genOut)
+	fmt.Printf("\nRun: apitwin --config %s\n", genOut)
 
 	return nil
 }
@@ -115,7 +115,7 @@ func runGenerateProto() error {
 		fmt.Printf("  %s\n", f)
 	}
 	fmt.Printf("\nStub files written to: %s/stubs/\n", genOut)
-	fmt.Printf("\nRun: mockr --config %s --grpc-proto %s\n", genOut, genProtos[0])
+	fmt.Printf("\nRun: apitwin --config %s --grpc-proto %s\n", genOut, genProtos[0])
 
 	return nil
 }

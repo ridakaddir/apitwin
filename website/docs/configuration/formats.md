@@ -4,7 +4,7 @@
 
 ---
 
-mockr auto-detects the config format from the file extension. All three formats support the same feature set.
+apitwin auto-detects the config format from the file extension. All three formats support the same feature set.
 
 ## TOML
 

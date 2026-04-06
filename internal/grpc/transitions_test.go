@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ridakaddir/mockr/internal/config"
+	"github.com/ridakaddir/apitwin/internal/config"
 )
 
 // helper: build a gRPC route with the given transitions and pre-seed the

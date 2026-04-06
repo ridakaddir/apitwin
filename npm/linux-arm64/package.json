@@ -1,14 +1,14 @@
 {
-  "name": "@ridakaddir/mockr-linux-arm64",
-  "version": "0.1.0",
-  "description": "mockr native binary for Linux ARM64",
+  "name": "@ridakaddir/apitwin-linux-arm64",
+  "version": "0.2.0-beta.1",
+  "description": "apitwin native binary for Linux ARM64",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ridakaddir/mockr.git"
+    "url": "https://github.com/ridakaddir/apitwin.git"
   },
   "os": ["linux"],
   "cpu": ["arm64"],
-  "files": ["bin/mockr"],
+  "files": ["bin/apitwin"],
   "preferUnplugged": true
 }

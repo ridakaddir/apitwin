@@ -51,7 +51,7 @@ file = "stubs/countries/{path.countryId}.json"
 
 ## Fallback behaviour
 
-If the resolved file does not exist, mockr falls through to the next condition or `fallback` — no 500 error. This lets you serve specific stubs for known values and a generic response for everything else.
+If the resolved file does not exist, apitwin falls through to the next condition or `fallback` — no 500 error. This lets you serve specific stubs for known values and a generic response for everything else.
 
 ---
 
