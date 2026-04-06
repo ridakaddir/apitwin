@@ -214,6 +214,6 @@ tasks:
       - echo "pre-push hook installed — lint:ci will run before every git push"
 
   init:
-    desc: Scaffold a apitwin.toml template in the current directory
+    desc: Scaffold an apitwin.toml template in the current directory
     cmds:
       - go run . --init

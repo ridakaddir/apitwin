@@ -49,7 +49,7 @@ gRPC server starts **only** when `--grpc-proto` is provided.
 
 ### `generate`
 
-Generate a apitwin config from an OpenAPI spec or `.proto` files.
+Generate an apitwin config from an OpenAPI spec or `.proto` files.
 
 ```sh
 apitwin generate [flags]

@@ -197,7 +197,7 @@ Flags:
   -p, --port          <n>      HTTP port (default: 4000)
   -c, --config        <path>   Config file or directory (default: apitwin.toml)
   -a, --api-prefix    <path>   Strip prefix before matching (e.g. /api)
-      --init                   Scaffold a apitwin.toml template
+      --init                   Scaffold an apitwin.toml template
       --record                 Record mode: proxy and save responses as stubs
       --grpc-proto    <file>   Path to .proto file (starts gRPC server)
       --grpc-port     <n>      gRPC port (default: 50051)

@@ -21,7 +21,7 @@ var (
 
 var generateCmd = &cobra.Command{
 	Use:   "generate",
-	Short: "Generate a apitwin config from an OpenAPI spec or .proto files",
+	Short: "Generate an apitwin config from an OpenAPI spec or .proto files",
 	Long: `Generate reads an OpenAPI 3 spec (file or URL) or .proto files and produces:
   - A apitwin config file (TOML/YAML/JSON) with one route per operation/method
   - Stub JSON files in stubs/ populated from spec examples or synthesised from schemas
