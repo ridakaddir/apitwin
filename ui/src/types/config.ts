@@ -62,3 +62,8 @@ export interface Transition {
   case: string;
   duration: number;
 }
+
+export interface TestTarget {
+  route: Route | GRPCRoute;
+  kind: "http" | "grpc";
+}

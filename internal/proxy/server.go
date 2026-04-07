@@ -135,9 +135,13 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 }
 
-// apiRoutesHandler returns the current config as JSON.
+// apiRoutesHandler returns the current config as JSON (GET only).
 func apiRoutesHandler(loader *config.Loader) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		cfg := loader.Get()
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(cfg)
@@ -146,7 +150,12 @@ func apiRoutesHandler(loader *config.Loader) http.HandlerFunc {
 
 // uiHandler serves the embedded React SPA with index.html fallback for client-side routing.
 func uiHandler() http.Handler {
-	distFS, _ := fs.Sub(uifs.DistFS, "dist")
+	distFS, err := fs.Sub(uifs.DistFS, "dist")
+	if err != nil {
+		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "UI assets not available", http.StatusInternalServerError)
+		})
+	}
 	fileServer := http.FileServer(http.FS(distFS))
 
 	return http.StripPrefix("/__ui", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

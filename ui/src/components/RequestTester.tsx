@@ -39,12 +39,15 @@ export function RequestTester({
       // Build URL with query params
       let url = path.startsWith("/") ? path : `/${path}`;
       if (queryText.trim()) {
-        const params = queryText
+        const params = new URLSearchParams();
+        queryText
           .split("\n")
           .filter((l) => l.includes("="))
-          .map((l) => l.trim())
-          .join("&");
-        url += (url.includes("?") ? "&" : "?") + params;
+          .forEach((l) => {
+            const idx = l.indexOf("=");
+            params.append(l.slice(0, idx).trim(), l.slice(idx + 1).trim());
+          });
+        url += (url.includes("?") ? "&" : "?") + params.toString();
       }
 
       // Build headers
@@ -191,8 +194,8 @@ export function RequestTester({
               </summary>
               <div className="px-3 pb-2">
                 <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs font-mono">
-                  {response.headers.map(([k, v]) => (
-                    <div key={k} className="contents">
+                  {response.headers.map(([k, v], i) => (
+                    <div key={i} className="contents">
                       <dt className="text-zinc-500">{k}</dt>
                       <dd className="text-zinc-400 truncate">{v}</dd>
                     </div>

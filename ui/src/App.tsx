@@ -2,12 +2,7 @@ import { useState } from "react";
 import { useConfig } from "./api/client";
 import { RouteDashboard } from "./components/RouteDashboard";
 import { TestPanel } from "./components/TestPanel";
-import type { Route, GRPCRoute } from "./types/config";
-
-interface TestTarget {
-  route: Route | GRPCRoute;
-  kind: "http" | "grpc";
-}
+import type { TestTarget } from "./types/config";
 
 export default function App() {
   const { config, error } = useConfig();

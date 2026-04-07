@@ -53,6 +53,8 @@ examples/openapi-generate/mocks-single/
 /stubs/
 
 # Devtool UI build output and dependencies
+# NOTE: ui/dist/index.html is tracked (placeholder for go:embed to compile
+# without a prior UI build). The hashed JS/CSS bundles in assets/ are ignored.
 /ui/node_modules/
 /ui/dist/assets/
 

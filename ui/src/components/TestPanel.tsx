@@ -1,11 +1,7 @@
 import { useEffect } from "react";
-import type { Route, GRPCRoute } from "../types/config";
+import type { Route } from "../types/config";
+import type { TestTarget } from "../types/config";
 import { RequestTester } from "./RequestTester";
-
-interface TestTarget {
-  route: Route | GRPCRoute;
-  kind: "http" | "grpc";
-}
 
 export function TestPanel({
   target,
