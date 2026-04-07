@@ -52,6 +52,12 @@ examples/openapi-generate/mocks-single/
 /apitwin.json
 /stubs/
 
+# Devtool UI build output and dependencies
+# NOTE: ui/dist/index.html is tracked (placeholder for go:embed to compile
+# without a prior UI build). The hashed JS/CSS bundles in assets/ are ignored.
+/ui/node_modules/
+/ui/dist/assets/
+
 # VitePress docs build output and dependencies
 /website/node_modules/
 /website/docs/.vitepress/dist/
