@@ -60,6 +60,10 @@ features:
     title: OpenAPI Generation
     details: Generate complete mock APIs from OpenAPI 3 specifications with high-quality stub synthesis.
 
+  - icon: 🛠️
+    title: Embedded Devtool UI
+    details: Browser dashboard at /__ui/ for inspecting routes, testing requests, and watching config changes in real time.
+
   - icon: 📊
     title: Record Mode
     details: Proxy a real API, save responses automatically, then replay them offline for consistent testing.
