@@ -14,8 +14,39 @@ tasks:
 
   # ── Build ──────────────────────────────────────────────────────────────────
 
+  ui:install:
+    desc: Install UI dependencies
+    dir: ui
+    cmds:
+      - pnpm install
+    sources:
+      - package.json
+    generates:
+      - node_modules/.modules.yaml
+
+  ui:build:
+    desc: Build the devtool UI for embedding
+    dir: ui
+    deps: [ui:install]
+    cmds:
+      - pnpm vite build
+    sources:
+      - src/**/*
+      - index.html
+      - vite.config.ts
+    generates:
+      - dist/index.html
+
+  ui:dev:
+    desc: Run Vite dev server (proxies API to Go on port 4000)
+    dir: ui
+    deps: [ui:install]
+    cmds:
+      - pnpm vite
+
   build:
-    desc: Build the apitwin binary
+    desc: Build the apitwin binary (with embedded UI)
+    deps: [ui:build]
     cmds:
       - go build {{.BUILD_FLAGS}} -o {{.BINARY}} .
     sources:
@@ -50,7 +81,7 @@ tasks:
   run:full-crud:
     desc: Run with the full-crud example config
     cmds:
-      - go run . --config examples/full-crud
+      - go run . --config examples/directory-stubs
 
   run:record:
     desc: "Run in record mode (set TARGET env var, e.g. TARGET=https://api.example.com task run:record)"

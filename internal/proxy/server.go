@@ -2,13 +2,17 @@ package proxy
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httputil"
+	"strings"
 	"time"
 
 	"github.com/ridakaddir/apitwin/internal/config"
 	"github.com/ridakaddir/apitwin/internal/logger"
+	uifs "github.com/ridakaddir/apitwin/ui"
 )
 
 // ServerOptions holds all runtime configuration for the proxy server.
@@ -68,6 +72,8 @@ func NewServer(opts ServerOptions) (*Server, error) {
 	handler := NewHandlerWithTransitions(loader, rp, opts.RecordMode, opts.ApiPrefix, ts, sched, stubWatcher)
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/__api/routes", apiRoutesHandler(loader))
+	mux.Handle("/__ui/", uiHandler())
 	mux.Handle("/", handler)
 
 	chain := corsMiddleware(logger.Middleware(mux))
@@ -104,6 +110,7 @@ func (s *Server) Start(ctx context.Context) error {
 			"target", s.opts.Target,
 			"prefix", prefixMsg,
 			"record", s.opts.RecordMode,
+			"ui", fmt.Sprintf("http://localhost:%d/__ui/", s.opts.Port),
 		)
 		if err := s.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			errCh <- err
@@ -126,6 +133,33 @@ func (s *Server) Start(ctx context.Context) error {
 		s.loader.Close()
 		return err
 	}
+}
+
+// apiRoutesHandler returns the current config as JSON.
+func apiRoutesHandler(loader *config.Loader) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cfg := loader.Get()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(cfg)
+	}
+}
+
+// uiHandler serves the embedded React SPA with index.html fallback for client-side routing.
+func uiHandler() http.Handler {
+	distFS, _ := fs.Sub(uifs.DistFS, "dist")
+	fileServer := http.FileServer(http.FS(distFS))
+
+	return http.StripPrefix("/__ui", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Try to serve the requested file; fall back to index.html for SPA routes.
+		path := strings.TrimPrefix(r.URL.Path, "/")
+		if path == "" {
+			path = "index.html"
+		}
+		if _, err := fs.Stat(distFS, path); err != nil {
+			r.URL.Path = "/index.html"
+		}
+		fileServer.ServeHTTP(w, r)
+	}))
 }
 
 // corsMiddleware injects CORS headers on every response and handles preflight.
