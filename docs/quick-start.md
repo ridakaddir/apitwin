@@ -15,6 +15,8 @@ apitwin --config ./mocks
 
 Your mock server is now running at `http://localhost:4000` with routes for every operation in the spec.
 
+> **Tip:** Open `http://localhost:4000/__ui/` in your browser to see all routes, test requests, and watch config changes in real time. The devtool UI is always available — no extra flags needed.
+
 ---
 
 ## HTTP — manual scaffold
@@ -31,6 +33,8 @@ Your frontend points at `http://localhost:4000`:
 - **Everything else** proxies to `--target`
 
 Edit `apitwin.toml` to add routes, change responses, or switch between cases — changes apply instantly with no restart.
+
+> **Tip:** Visit `http://localhost:4000/__ui/` for a visual dashboard of all your mocked routes.
 
 ### Minimal config example
 
@@ -122,6 +126,7 @@ grpcurl -plaintext -d '{"country_code":"morocco"}' localhost:50051 geo.CountrySe
 
 ## What's next?
 
+- [Devtool UI](features/devtool-ui.md) — visual dashboard for routes and request testing
 - [CLI Reference](cli-reference.md) — all flags and subcommands
 - [Configuration](configuration/README.md) — config file format and options
 - [Features](features/conditions.md) — conditions, persistence, transitions, and more

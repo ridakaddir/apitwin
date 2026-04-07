@@ -43,6 +43,7 @@
 - **Directory-based stubs** — CRUD operations with one JSON file per resource
 - **Reverse proxy fallthrough** — unmatched routes forward to a real upstream API
 - **Hot reload** — edit config files and see changes on the next request
+- **Embedded devtool UI** — browser dashboard at `/__ui/` for inspecting routes, testing requests, and watching config changes live
 - **Record mode** — proxy a real API, save responses as stubs, replay offline
 - **OpenAPI generation** — generate a complete mock from any OpenAPI 3 spec
 - **Response transitions** — time-based state progression (e.g. `pending` → `approved`)
@@ -247,6 +248,7 @@ apitwin/
 │   └── proxy/                 # HTTP server, handler, matcher, conditions, mocking
 ├── examples/                  # Runnable examples for each feature
 ├── docs/                      # Usage documentation
+├── ui/                        # Embedded devtool UI (React + Vite, go:embed)
 ├── npm/                       # npm distribution packages
 ├── assets/                    # Logos
 └── .github/workflows/         # CI, release, npm publish

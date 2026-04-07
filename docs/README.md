@@ -40,6 +40,7 @@ All examples throughout this documentation use a **geographic data API** (contin
 | [Record Mode](features/record-mode.md) | Proxy a real API, save responses, replay offline |
 | [Hot Reload](features/hot-reload.md) | Edit config files and see changes on the next request |
 | [API Prefix](features/api-prefix.md) | Strip path prefixes before matching and forwarding |
+| [Devtool UI](features/devtool-ui.md) | Browser dashboard for inspecting routes, testing requests, and watching config changes |
 
 ## gRPC
 
