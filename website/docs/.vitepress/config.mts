@@ -68,7 +68,8 @@ export default defineConfig({
           { text: 'Response Transitions', link: '/features/response-transitions' },
           { text: 'Record Mode', link: '/features/record-mode' },
           { text: 'Hot Reload', link: '/features/hot-reload' },
-          { text: 'API Prefix', link: '/features/api-prefix' }
+          { text: 'API Prefix', link: '/features/api-prefix' },
+          { text: 'Devtool UI', link: '/features/devtool-ui' }
         ]
       },
       {
