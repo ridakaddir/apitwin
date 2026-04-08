@@ -86,13 +86,13 @@ Both snake_case (`country_code`) and camelCase (`countryCode`) field names in pr
 
 ## Response body
 
-All persist operations return an empty proto response (`{}`). The gRPC status code signals success or failure.
+Persist operations return the updated or created data in the response. For `update` and `append`, the response contains the persisted object. For `delete`, an empty response (`{}`) is returned. The gRPC status code signals success or failure.
 
 ---
 
 ## Response wrapping
 
-Use the `wrap` field to wrap persist responses. The file on disk stays flat, but the API response is wrapped:
+Use the `wrap` field to match the proto response message shape. The file on disk stays flat, but the response is wrapped:
 
 ```toml
   [grpc_routes.cases.country]

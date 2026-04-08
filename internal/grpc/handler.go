@@ -123,12 +123,22 @@ func (h *handler) serve(srv interface{}, stream grpc.ServerStream) error {
 
 		// Persist (stateful mutations) — handled before delay/stub-load.
 		if c.Persist {
-			grpcCode, ok := h.applyGRPCPersist(c, reqMap, start, fullMethod)
+			grpcCode, ok, persistResult := h.applyGRPCPersist(c, reqMap, start, fullMethod)
 			if ok {
-				// Always send at least an empty message — unary gRPC requires
-				// exactly one response message before closing the stream.
-				empty := []byte{}
-				if err := stream.SendMsg(&empty); err != nil {
+				// Encode the persist result into proto wire format and send it
+				// back so the client receives the updated/created data.
+				var wireResp []byte
+				if persistResult != nil {
+					jsonBody, err := json.Marshal(persistResult)
+					if err != nil {
+						return status.Errorf(codes.Internal, "marshal persist response: %v", err)
+					}
+					wireResp, err = h.registry.EncodeResponse(md, jsonBody)
+					if err != nil {
+						return status.Errorf(codes.Internal, "encode persist response: %v", err)
+					}
+				}
+				if err := stream.SendMsg(&wireResp); err != nil {
 					return status.Errorf(codes.Internal, "send persist response: %v", err)
 				}
 				if grpcCode != codes.OK {
