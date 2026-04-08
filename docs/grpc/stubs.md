@@ -27,6 +27,28 @@ json   = '{"countryId": "{{uuid}}", "createdAt": "{{now}}"}'
 
 ---
 
+## Dynamic file paths
+
+File paths support `{body.field}` placeholders, resolved from the decoded request body. This lets you serve per-resource responses from individual stub files:
+
+```toml
+[[grpc_routes]]
+match    = "/geo.CountryService/GetCountry"
+fallback = "ok"
+
+  [grpc_routes.cases.ok]
+  file = "stubs/countries/{body.country_code}.json"
+```
+
+```sh
+grpcurl -plaintext -d '{"country_code":"morocco"}' localhost:50051 geo.CountryService/GetCountry
+# → reads stubs/countries/morocco.json
+```
+
+Both `country_code` (snake_case) and `countryCode` (camelCase) are matched automatically against the decoded protojson body. Unsafe filename characters are sanitised to `_`.
+
+---
+
 ## Conditions
 
 Conditions evaluate fields from the decoded request message. Use `source = "body"` and dot-notation field paths. Both the proto field name (`country_code`) and its camelCase equivalent (`countryCode`) are accepted automatically:

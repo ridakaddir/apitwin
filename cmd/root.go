@@ -37,9 +37,10 @@ var (
 	initMode   bool
 
 	// gRPC flags — server only starts when --grpc-proto is provided.
-	grpcPort   int
-	grpcProtos []string
-	grpcTarget string
+	grpcPort        int
+	grpcProtos      []string
+	grpcTarget      string
+	grpcImportPaths []string
 )
 
 var rootCmd = &cobra.Command{
@@ -68,6 +69,7 @@ func init() {
 	rootCmd.Flags().IntVar(&grpcPort, "grpc-port", 50051, "gRPC server port (only used when --grpc-proto is provided)")
 	rootCmd.Flags().StringArrayVar(&grpcProtos, "grpc-proto", nil, "Path to a .proto file; repeat for multiple files (enables the gRPC server)")
 	rootCmd.Flags().StringVar(&grpcTarget, "grpc-target", "", "Upstream gRPC server for proxy/forward mode (e.g. localhost:9090)")
+	rootCmd.Flags().StringArrayVar(&grpcImportPaths, "import-path", nil, "Extra directory to search for proto imports; repeat for multiple paths")
 }
 
 func run(cmd *cobra.Command, args []string) error {
@@ -111,10 +113,11 @@ func run(cmd *cobra.Command, args []string) error {
 	// Start the gRPC server only when --grpc-proto is provided.
 	if len(grpcProtos) > 0 {
 		grpcSrv, err := apitwingrpc.NewServer(apitwingrpc.ServerOptions{
-			ProtoFiles: grpcProtos,
-			Target:     grpcTarget,
-			Port:       grpcPort,
-			Loader:     srv.Loader(),
+			ProtoFiles:  grpcProtos,
+			ImportPaths: grpcImportPaths,
+			Target:      grpcTarget,
+			Port:        grpcPort,
+			Loader:      srv.Loader(),
 		})
 		if err != nil {
 			return fmt.Errorf("starting gRPC server: %w", err)

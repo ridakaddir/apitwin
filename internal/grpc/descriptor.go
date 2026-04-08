@@ -138,6 +138,24 @@ func (r *Registry) DecodeRequest(md *desc.MethodDescriptor, b []byte) (map[strin
 	return out, nil
 }
 
+// FindRepeatedField inspects the response message for a single repeated message
+// field and returns its JSON (camelCase) name. Used to auto-wrap directory
+// aggregation arrays into the correct response object field.
+// Returns "" if there is no single repeated message field.
+func (r *Registry) FindRepeatedField(md *desc.MethodDescriptor) string {
+	outType := md.GetOutputType()
+	var candidate string
+	for _, f := range outType.GetFields() {
+		if f.IsRepeated() && !f.IsMap() {
+			if candidate != "" {
+				return "" // ambiguous — more than one repeated field
+			}
+			candidate = f.GetJSONName()
+		}
+	}
+	return candidate
+}
+
 // EncodeResponse takes a JSON blob (protojson-compatible) and serialises it
 // into wire bytes for the given method's output type.
 func (r *Registry) EncodeResponse(md *desc.MethodDescriptor, jsonBytes []byte) ([]byte, error) {

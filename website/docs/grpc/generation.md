@@ -71,6 +71,13 @@ After generating, start the server:
 apitwin --config ./mocks --grpc-proto geo.proto
 ```
 
+If your protos import shared types from another directory, use `--import-path` on both commands:
+
+```sh
+apitwin generate --proto proto/service/v1/service.proto --import-path proto/ --out ./mocks
+apitwin --config ./mocks --grpc-proto proto/service/v1/service.proto --import-path proto/
+```
+
 ---
 
 **See also:** [gRPC Quick Start](quick-start.md) | [Configuration](config.md) | [OpenAPI Generation](../openapi/generate.md)

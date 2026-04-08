@@ -23,14 +23,14 @@ fallback = "created"
   key      = "countryCode"                    # Field used as filename; auto-generated if missing
   defaults = "stubs/defaults/country.json"    # Server-generated fields ({{uuid}}, {{now}})
 
-# List countries — directory aggregation
+# List countries — directory aggregation (auto-wraps into repeated field)
 [[grpc_routes]]
 match    = "/geo.CountryService/ListCountries"
 enabled  = true
 fallback = "list"
 
   [grpc_routes.cases.list]
-  file = "stubs/countries/"                   # Returns array of all .json files
+  file = "stubs/countries/"                   # Auto-wraps into {"countries": [...]}
 
 # Get country — single file read
 [[grpc_routes]]

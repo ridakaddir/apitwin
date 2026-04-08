@@ -82,6 +82,7 @@ apitwin [flags]
 | `--grpc-proto <file>` | | | Path to `.proto` file (repeatable; enables gRPC server) |
 | `--grpc-port <n>` | | `50051` | gRPC server port |
 | `--grpc-target <addr>` | | | Upstream gRPC server for proxy mode |
+| `--import-path <dir>` | | | Extra proto import search paths (repeatable) |
 | `--help` | `-h` | | |
 | `--version` | `-v` | | |
 
@@ -232,12 +233,14 @@ routes:
 | `key` | string | | Field name used as filename for persist operations |
 | `array_key` | string | | Array field name in stub JSON (for legacy single-file persistence) |
 | `defaults` | string | | Path to defaults JSON file, deep-merged under request body |
+| `wrap` | string | | Wrap directory aggregation array into `{"field": [...]}` (gRPC only; auto-detected from proto if omitted) |
 
 **Rules:**
 - Use `json` OR `file`, not both
 - `json` supports template tokens (`{{uuid}}`, `{{now}}`, `{{timestamp}}`, `{{ref:...}}`)
 - `file` paths support dynamic placeholders (`{query.x}`, `{body.x}`, `{header.x}`, `{path.x}`)
 - File path ending with `/` aggregates all `.json` files in directory into an array
+- For gRPC, directory aggregation auto-wraps the array into the response message's `repeated` field; use `wrap` to override
 - `persist = true` requires `merge` to be set
 - `defaults` file is deep-merged as base, request body fields win on conflicts
 
@@ -1135,6 +1138,9 @@ apitwin mocks unary gRPC methods from `.proto` files. No `protoc` or code genera
 apitwin --config ./mocks --grpc-proto service.proto
 apitwin --config ./mocks --grpc-proto users.proto --grpc-proto orders.proto
 apitwin --config ./mocks --grpc-proto service.proto --grpc-target localhost:9090
+
+# With proto import paths (for protos that import shared types)
+apitwin --config ./mocks --grpc-proto proto/service/v1/service.proto --import-path proto/
 ```
 
 ### gRPC route config
@@ -1182,6 +1188,36 @@ Same as HTTP routes: `match`, `enabled`, `fallback`, `conditions`, `cases`, `tra
 | `14` | UNAVAILABLE | Service down |
 | `16` | UNAUTHENTICATED | No credentials |
 
+### gRPC `{body.field}` interpolation
+
+File paths in gRPC cases support `{body.field}` placeholders, resolved from the decoded protobuf request body. Both snake_case and camelCase field names are matched automatically:
+
+```toml
+[grpc_routes.cases.ok]
+file = "stubs/items/{body.item_id}.json"   # resolves to stubs/items/abc-123.json
+```
+
+Unsafe filename characters are sanitised to `_`. This works for both read routes and persist routes.
+
+### gRPC directory wrapping
+
+When `file` points to a directory, apitwin aggregates all `.json` files into an array. For gRPC, the array is automatically wrapped into the response message's `repeated` field:
+
+```toml
+# If ListItemsResponse has: repeated Item items = 1;
+# → auto-wraps into {"items": [...]}
+[grpc_routes.cases.list]
+file = "stubs/items/"
+```
+
+Use the `wrap` field to override auto-detection (e.g. when the response has multiple repeated fields):
+
+```toml
+[grpc_routes.cases.list]
+file = "stubs/items/"
+wrap = "items"              # explicit wrapping
+```
+
 ### gRPC stubs
 Stubs use protojson format (camelCase field names). Both snake_case and camelCase are accepted in conditions.
 
@@ -1218,7 +1254,7 @@ fallback = "create"
   key      = "itemId"
   defaults = "stubs/defaults/item.json"
 
-# List
+# List (auto-wraps into repeated field, e.g. {"items": [...]})
 [[grpc_routes]]
 match    = "/items.ItemService/ListItems"
 fallback = "list"
@@ -1329,6 +1365,10 @@ apitwin generate --proto service.proto --format yaml
 
 # Then serve
 apitwin --config ./mocks --grpc-proto service.proto
+
+# With import paths on both commands
+apitwin generate --proto proto/v1/service.proto --import-path proto/ --out ./mocks
+apitwin --config ./mocks --grpc-proto proto/v1/service.proto --import-path proto/
 ```
 
 ### What gets generated
@@ -1597,6 +1637,9 @@ fallback = "data"
 | Template tokens not rendered in stub files | Using `{{uuid}}` in a file loaded via `file` | `{{uuid}}`, `{{now}}`, `{{timestamp}}` only work in inline `json` and `defaults` files. In stub files loaded via `file`, only `{{ref:...}}` tokens are resolved. Move dynamic tokens to inline `json` or a defaults file. |
 | Dynamic file 404 | Placeholder value contains unsafe chars | Values are sanitized to `[a-zA-Z0-9_\-.]` |
 | Conditions ignored | `source = "query"` or `"header"` in gRPC route | gRPC only supports `source = "body"` |
+| gRPC list returns error about `expecting '{'` | Directory aggregation returns `[...]` but response expects an object | Use `wrap = "fieldName"` or let auto-detection handle it (requires exactly one `repeated` field in the response message) |
+| gRPC `{body.field}` literal in path | File reads `{body.id}.json` as literal filename | Ensure the request body contains the field; both snake_case and camelCase are tried |
+| Proto import fails on serve | `--import-path` not set on the serve command | Add `--import-path <dir>` alongside `--grpc-proto` |
 | Cross-ref security error | Using `../` or absolute paths in refs | Refs must stay within config directory; use relative paths |
 | Defaults not merging | Expecting defaults to override body | Body wins over defaults (defaults are the base layer) |
 | Fallback served with transitions | Using `fallback` alongside `transitions` | When transitions are defined, `transitions[0]` is served from the start — not the fallback. Put your initial state as the first transition entry. |

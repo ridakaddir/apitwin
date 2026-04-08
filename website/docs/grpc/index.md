@@ -18,11 +18,14 @@ apitwin supports gRPC mock and proxy alongside the HTTP server — both run in t
 
 - **No protoc** — apitwin parses `.proto` files at runtime using reflection
 - **Unary mocking** — stub responses with protojson (JSON with proto field names)
+- **`{body.field}` interpolation** — dynamic file paths from request body fields (e.g. `stubs/{body.id}.json`)
+- **Directory wrapping** — directory aggregation auto-wraps into the correct response field for list RPCs
 - **Condition routing** — route calls to different cases based on request body fields
 - **Proxy fallthrough** — forward unmatched methods to an upstream gRPC server
 - **Directory persistence** — stateful CRUD operations on directory-based stub files
 - **Transitions** — time-based response progression, same as HTTP
 - **Server reflection** — `grpcurl` and `grpc-ui` work out of the box
+- **Import paths** — `--import-path` flag for resolving proto imports from shared directories
 
 ## Documentation
 
