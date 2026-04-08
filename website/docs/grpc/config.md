@@ -63,6 +63,54 @@ match = "~/geo\\..*Service/.*"             # regex (prefix with ~)
 
 ---
 
+## `{body.field}` interpolation
+
+File paths in gRPC cases support `{body.field}` placeholders, resolved from the decoded request message. This enables per-resource file lookups without hardcoding paths:
+
+```toml
+[[grpc_routes]]
+match    = "/geo.CountryService/GetCountry"
+fallback = "ok"
+
+  [grpc_routes.cases.ok]
+  file = "stubs/countries/{body.country_code}.json"
+```
+
+Both snake_case (`country_code`) and camelCase (`countryCode`) field names are matched automatically. Characters unsafe for filenames are replaced with `_`.
+
+---
+
+## Directory wrapping
+
+When `file` points to a directory (trailing `/`), apitwin aggregates all `.json` files into an array. For gRPC, this array is automatically wrapped into the correct response field.
+
+**Auto-detection:** apitwin inspects the response message descriptor. If there is exactly one `repeated` field, the array is wrapped into that field:
+
+```toml
+# ListCountriesResponse has: repeated Country countries = 1;
+# → auto-wraps into {"countries": [...]}
+[[grpc_routes]]
+match    = "/geo.CountryService/ListCountries"
+fallback = "list"
+
+  [grpc_routes.cases.list]
+  file = "stubs/countries/"
+```
+
+**Explicit `wrap` field:** when auto-detection is ambiguous (multiple repeated fields) or you want to be explicit, use the `wrap` field:
+
+```toml
+  [grpc_routes.cases.list]
+  file = "stubs/countries/"
+  wrap = "countries"          # wraps array into {"countries": [...]}
+```
+
+The `wrap` field takes precedence over auto-detection when both are present.
+
+> **Note:** For HTTP routes, directory aggregation returns a raw JSON array as before — `wrap` only applies to gRPC.
+
+---
+
 ## Transitions
 
 Time-based transitions work identically to HTTP. The gRPC route key is the `match` pattern:

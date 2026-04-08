@@ -35,6 +35,7 @@ gRPC server starts **only** when `--grpc-proto` is provided.
 | `--grpc-proto <file>` | — | Path to a `.proto` file; repeat for multiple files |
 | `--grpc-port <n>` | `50051` | gRPC server port |
 | `--grpc-target <addr>` | — | Upstream gRPC server for proxy mode (e.g. `localhost:9090`) |
+| `--import-path <dir>` | — | Extra directory to search for proto imports; repeat for multiple |
 
 ### General
 
@@ -107,6 +108,14 @@ apitwin --config ./mocks --target https://restcountries.com/v3.1 --record
 
 ```sh
 apitwin --config ./mocks --grpc-proto geo.proto
+```
+
+**gRPC with proto imports from a shared directory:**
+
+```sh
+apitwin --config ./mocks \
+      --grpc-proto proto/service/v1/service.proto \
+      --import-path proto/
 ```
 
 **gRPC with upstream proxy:**

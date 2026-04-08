@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/jhump/protoreflect/desc" //nolint:staticcheck
 	"github.com/ridakaddir/apitwin/internal/config"
 	"github.com/ridakaddir/apitwin/internal/logger"
 	"github.com/ridakaddir/apitwin/internal/persist"
@@ -143,7 +143,7 @@ func (h *handler) serve(srv interface{}, stream grpc.ServerStream) error {
 		}
 
 		// Load stub JSON.
-		jsonBody, err := h.loadStub(c, reqMap)
+		jsonBody, err := h.loadStub(c, reqMap, md)
 		if err != nil {
 			logger.Error("grpc load stub", "err", err, "method", fullMethod)
 			logger.LogGRPC(fullMethod, codes.Internal, time.Since(start), logger.SourceStub)
@@ -217,16 +217,14 @@ func (h *handler) resolveCase(route *config.GRPCRoute, reqMap map[string]interfa
 }
 
 // loadStub reads stub content from Case.File or Case.JSON and runs template rendering.
-func (h *handler) loadStub(c config.Case, reqMap map[string]interface{}) ([]byte, error) {
+// md is the method descriptor for the matched gRPC method (used for auto-wrapping directory responses).
+func (h *handler) loadStub(c config.Case, reqMap map[string]interface{}, md *desc.MethodDescriptor) ([]byte, error) {
 	configDir := h.loader.ConfigDir()
 
 	switch {
 	case c.File != "":
-		filePath := c.File
+		filePath := resolveGRPCFilePath(c.File, reqMap, configDir)
 		wantsDir := strings.HasSuffix(filePath, "/")
-		if !filepath.IsAbs(filePath) && configDir != "" {
-			filePath = filepath.Join(configDir, filePath)
-		}
 
 		// Check if this is a directory path (for aggregation)
 		info, statErr := os.Stat(filePath)
@@ -234,6 +232,14 @@ func (h *handler) loadStub(c config.Case, reqMap map[string]interface{}) ([]byte
 			b, err := persist.ReadDir(filePath)
 			if err != nil {
 				return nil, fmt.Errorf("reading stub directory %q: %w", filePath, err)
+			}
+			// Wrap array into a response object field for gRPC compatibility.
+			wrapKey := c.Wrap
+			if wrapKey == "" && md != nil {
+				wrapKey = h.registry.FindRepeatedField(md)
+			}
+			if wrapKey != "" {
+				b = wrapJSONArray(wrapKey, b)
 			}
 			return b, nil
 		}
@@ -386,6 +392,18 @@ func mapToJSONBytes(m map[string]interface{}) []byte {
 	}
 	b, _ := json.Marshal(m)
 	return b
+}
+
+// wrapJSONArray wraps a JSON array into an object: {"key": [...]}.
+func wrapJSONArray(key string, arrayJSON []byte) []byte {
+	trimmed := bytes.TrimSpace(arrayJSON)
+	var buf bytes.Buffer
+	buf.WriteString(`{"`)
+	buf.WriteString(key)
+	buf.WriteString(`":`)
+	buf.Write(trimmed)
+	buf.WriteString("}\n")
+	return buf.Bytes()
 }
 
 // snakeToCamel converts a snake_case field name to lowerCamelCase.

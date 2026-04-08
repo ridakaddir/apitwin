@@ -18,6 +18,7 @@ Cases are named response definitions attached to a route. Each route can have mu
 | `merge` | string | — | `update`, `append`, or `delete` (requires `persist: true`) |
 | `key` | string | — | Field name for filename when using `append` with directories (resolved from body, path params, or query — see [directory stubs](../features/directory-stubs.md#key-resolution-for-filenames)) |
 | `defaults` | string | — | JSON file with default values for `append`/`update` operations |
+| `wrap` | string | — | Wrap directory aggregation array into `{"field": [...]}` (gRPC only; auto-detected from proto if omitted) |
 
 ---
 
@@ -64,6 +65,14 @@ When `file` points to a directory (trailing `/`), apitwin aggregates all `.json`
 ```toml
 [routes.cases.list]
 file = "stubs/countries/"    # returns array of all files in stubs/countries/
+```
+
+For gRPC routes, the array is automatically wrapped into the response message's `repeated` field (e.g. `{"countries": [...]}`). Use the `wrap` field to override auto-detection:
+
+```toml
+[grpc_routes.cases.list]
+file = "stubs/countries/"
+wrap = "countries"           # wraps into {"countries": [...]}
 ```
 
 ---

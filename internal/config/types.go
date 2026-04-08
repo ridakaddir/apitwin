@@ -76,6 +76,7 @@ type Case struct {
 	Key      string `json:"key"       yaml:"key"       toml:"key"`       // record lookup key
 	ArrayKey string `json:"array_key" yaml:"array_key" toml:"array_key"` // array field in stub JSON
 	Defaults string `json:"defaults"  yaml:"defaults"  toml:"defaults"`  // JSON file with default values for append/update
+	Wrap     string `json:"wrap"      yaml:"wrap"      toml:"wrap"`      // wrap directory array into {"field": [...]}
 
 	// Cascade mutation fields
 	Primary *CascadePrimary `json:"primary,omitempty"  yaml:"primary,omitempty"  toml:"primary,omitempty"`
