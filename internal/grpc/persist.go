@@ -30,6 +30,8 @@ func (h *handler) applyGRPCPersist(
 
 	// Strip fields used as {body.*} path placeholders so they don't leak
 	// into the persisted stub (they are routing fields, not data fields).
+	// persistData is what gets stored; reqMap (unfiltered) is still passed to
+	// loadGRPCDefaults for template lookups since defaults may reference routing fields.
 	persistData := stripPathPlaceholderFields(c.File, reqMap)
 
 	switch strings.ToLower(c.Merge) {

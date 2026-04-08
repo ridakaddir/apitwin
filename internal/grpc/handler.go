@@ -127,7 +127,8 @@ func (h *handler) serve(srv interface{}, stream grpc.ServerStream) error {
 			if ok {
 				// Encode the persist result into proto wire format and send it
 				// back so the client receives the updated/created data.
-				var wireResp []byte
+				// For delete (nil result), wireResp stays empty.
+				wireResp := []byte{}
 				if persistResult != nil {
 					jsonBody, err := json.Marshal(persistResult)
 					if err != nil {
