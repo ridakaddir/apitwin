@@ -1,0 +1,49 @@
+syntax = "proto3";
+package geo;
+option go_package = "github.com/example/geo";
+
+service CountryService {
+  rpc GetCountry    (GetCountryRequest)    returns (GetCountryResponse);
+  rpc ListCountries (ListCountriesRequest) returns (ListCountriesResponse);
+  rpc CreateCountry (CreateCountryRequest) returns (GetCountryResponse);
+  rpc UpdateCountry (UpdateCountryRequest) returns (GetCountryResponse);
+  rpc DeleteCountry (DeleteCountryRequest) returns (DeleteCountryResponse);
+}
+
+message Country {
+  string code      = 1;
+  string name      = 2;
+  string continent = 3;
+}
+
+message GetCountryRequest {
+  string country_code = 1;
+}
+
+message GetCountryResponse {
+  Country country = 1;
+}
+
+message ListCountriesRequest {}
+
+message ListCountriesResponse {
+  repeated Country countries = 1;
+}
+
+message CreateCountryRequest {
+  string code      = 1;
+  string name      = 2;
+  string continent = 3;
+}
+
+message UpdateCountryRequest {
+  string country_code = 1;
+  string name         = 2;
+  string continent    = 3;
+}
+
+message DeleteCountryRequest {
+  string country_code = 1;
+}
+
+message DeleteCountryResponse {}

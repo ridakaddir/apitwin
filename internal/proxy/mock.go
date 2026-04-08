@@ -80,6 +80,11 @@ func serveMock(w http.ResponseWriter, r *http.Request, c config.Case, bodyBytes 
 			return
 		}
 
+		// Wrap response into {"field": <content>} if configured.
+		if c.Wrap != "" {
+			body = persist.WrapJSON(c.Wrap, body)
+		}
+
 	case c.JSON != "":
 		// Resolve cross-references first
 		resolved, err := resolveRefsWithContext([]byte(c.JSON), configDir, visited, refCtx)

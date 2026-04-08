@@ -239,7 +239,7 @@ func (h *handler) loadStub(c config.Case, reqMap map[string]interface{}, md *des
 				wrapKey = h.registry.FindRepeatedField(md)
 			}
 			if wrapKey != "" {
-				b = wrapJSONArray(wrapKey, b)
+				b = persist.WrapJSON(wrapKey, b)
 			}
 			return b, nil
 		}
@@ -248,6 +248,9 @@ func (h *handler) loadStub(c config.Case, reqMap map[string]interface{}, md *des
 		b, err := os.ReadFile(filePath)
 		if err != nil {
 			return nil, fmt.Errorf("reading stub file %q: %w", filePath, err)
+		}
+		if c.Wrap != "" {
+			b = persist.WrapJSON(c.Wrap, b)
 		}
 		return b, nil
 
@@ -392,18 +395,6 @@ func mapToJSONBytes(m map[string]interface{}) []byte {
 	}
 	b, _ := json.Marshal(m)
 	return b
-}
-
-// wrapJSONArray wraps a JSON array into an object: {"key": [...]}.
-func wrapJSONArray(key string, arrayJSON []byte) []byte {
-	trimmed := bytes.TrimSpace(arrayJSON)
-	var buf bytes.Buffer
-	buf.WriteString(`{"`)
-	buf.WriteString(key)
-	buf.WriteString(`":`)
-	buf.Write(trimmed)
-	buf.WriteString("}\n")
-	return buf.Bytes()
 }
 
 // snakeToCamel converts a snake_case field name to lowerCamelCase.

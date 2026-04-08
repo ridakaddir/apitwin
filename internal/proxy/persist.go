@@ -81,7 +81,11 @@ func applyPersist(w http.ResponseWriter, r *http.Request, c config.Case, bodyByt
 			return true, ""
 		}
 		logger.SetSource(w, logger.SourceStub)
-		writeJSON(w, c.StatusCode(), updated)
+		if c.Wrap != "" {
+			writeJSON(w, c.StatusCode(), map[string]any{c.Wrap: updated})
+		} else {
+			writeJSON(w, c.StatusCode(), updated)
+		}
 		return true, filePath
 
 	case "append":
@@ -123,7 +127,11 @@ func applyPersist(w http.ResponseWriter, r *http.Request, c config.Case, bodyByt
 			return true, ""
 		}
 		logger.SetSource(w, logger.SourceStub)
-		writeJSON(w, c.StatusCode(), result)
+		if c.Wrap != "" {
+			writeJSON(w, c.StatusCode(), map[string]any{c.Wrap: result})
+		} else {
+			writeJSON(w, c.StatusCode(), result)
+		}
 		return true, createdPath
 
 	case "delete":

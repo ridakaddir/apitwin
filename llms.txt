@@ -233,14 +233,15 @@ routes:
 | `key` | string | | Field name used as filename for persist operations |
 | `array_key` | string | | Array field name in stub JSON (for legacy single-file persistence) |
 | `defaults` | string | | Path to defaults JSON file, deep-merged under request body |
-| `wrap` | string | | Wrap directory aggregation array into `{"field": [...]}` (gRPC only; auto-detected from proto if omitted) |
+| `wrap` | string | | Wrap response into `{"field": <content>}` — works with directories and single files, for both HTTP and gRPC; auto-detected from proto for gRPC directories if omitted |
 
 **Rules:**
 - Use `json` OR `file`, not both
 - `json` supports template tokens (`{{uuid}}`, `{{now}}`, `{{timestamp}}`, `{{ref:...}}`)
 - `file` paths support dynamic placeholders (`{query.x}`, `{body.x}`, `{header.x}`, `{path.x}`)
 - File path ending with `/` aggregates all `.json` files in directory into an array
-- For gRPC, directory aggregation auto-wraps the array into the response message's `repeated` field; use `wrap` to override
+- `wrap` wraps the response into `{"field": <content>}` — works for both single files and directories, both HTTP and gRPC
+- For gRPC directories, auto-detection from proto `repeated` fields applies when `wrap` is omitted; use `wrap` to override
 - `persist = true` requires `merge` to be set
 - `defaults` file is deep-merged as base, request body fields win on conflicts
 
@@ -1199,24 +1200,32 @@ file = "stubs/items/{body.item_id}.json"   # resolves to stubs/items/abc-123.jso
 
 Unsafe filename characters are sanitised to `_`. This works for both read routes and persist routes.
 
-### gRPC directory wrapping
+### Response wrapping
 
-When `file` points to a directory, apitwin aggregates all `.json` files into an array. For gRPC, the array is automatically wrapped into the response message's `repeated` field:
+The `wrap` field wraps the response into `{"field": <content>}`. It works for both single files and directories, and for both HTTP and gRPC routes.
 
-```toml
-# If ListItemsResponse has: repeated Item items = 1;
-# → auto-wraps into {"items": [...]}
-[grpc_routes.cases.list]
-file = "stubs/items/"
-```
-
-Use the `wrap` field to override auto-detection (e.g. when the response has multiple repeated fields):
+**Single-file wrapping** — the file stores a flat object, `wrap` adds the envelope:
 
 ```toml
-[grpc_routes.cases.list]
-file = "stubs/items/"
-wrap = "items"              # explicit wrapping
+# File contains {"code":"morocco","name":"Morocco","continent":"africa"}
+# → response: {"country": {"code":"morocco","name":"Morocco","continent":"africa"}}
+[grpc_routes.cases.ok]
+file = "stubs/countries/{body.country_code}.json"
+wrap = "country"
 ```
+
+**Directory wrapping** — aggregates files into an array and wraps it:
+
+```toml
+# → response: {"countries": [{...}, {...}]}
+[grpc_routes.cases.list]
+file = "stubs/countries/"
+wrap = "countries"
+```
+
+For gRPC directories, auto-detection from proto `repeated` fields applies when `wrap` is omitted. Use `wrap` to override auto-detection or when the response has multiple repeated fields.
+
+Wrapping also applies to persist responses (`append` and `update`), so create/update operations return the wrapped shape while the file on disk stays flat.
 
 ### gRPC stubs
 Stubs use protojson format (camelCase field names). Both snake_case and camelCase are accepted in conditions.

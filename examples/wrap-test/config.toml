@@ -1,0 +1,63 @@
+# HTTP Response Wrapping Example
+#
+# Demonstrates the `wrap` field for HTTP responses. Each stub file stores a flat
+# object (e.g. {"code":"morocco", "name":"Morocco", ...}), but the response wraps
+# it into a named key (e.g. {"country": {"code":"morocco", ...}}).
+
+# GET /countries/:code → {"country": {code, name, continent}}
+[[routes]]
+method   = "GET"
+match    = "/countries/{code}"
+fallback = "get"
+
+  [routes.cases.get]
+  file = "stubs/countries/{path.code}.json"
+  wrap = "country"
+
+# GET /countries → {"countries": [{...}, ...]}
+[[routes]]
+method   = "GET"
+match    = "/countries"
+fallback = "list"
+
+  [routes.cases.list]
+  file = "stubs/countries/"
+  wrap = "countries"
+
+# POST /countries → {"country": {code, name, continent}}
+[[routes]]
+method   = "POST"
+match    = "/countries"
+fallback = "create"
+
+  [routes.cases.create]
+  status  = 201
+  file    = "stubs/countries/"
+  persist = true
+  merge   = "append"
+  key     = "code"
+  wrap    = "country"
+
+# PATCH /countries/:code → {"country": {code, name, continent}}
+[[routes]]
+method   = "PATCH"
+match    = "/countries/{code}"
+fallback = "update"
+
+  [routes.cases.update]
+  file    = "stubs/countries/{path.code}.json"
+  persist = true
+  merge   = "update"
+  wrap    = "country"
+
+# DELETE /countries/:code → 204 No Content
+[[routes]]
+method   = "DELETE"
+match    = "/countries/{code}"
+fallback = "delete"
+
+  [routes.cases.delete]
+  status  = 204
+  file    = "stubs/countries/{path.code}.json"
+  persist = true
+  merge   = "delete"

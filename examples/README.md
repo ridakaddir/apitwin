@@ -68,9 +68,18 @@ examples/
 │   ├── apitwin.toml
 │   └── stubs/
 │
-└── grpc-directory-persist/   # gRPC — directory-based CRUD
-    ├── items.proto
-    ├── apitwin.toml
+├── grpc-directory-persist/   # gRPC — directory-based CRUD
+│   ├── items.proto
+│   ├── apitwin.toml
+│   └── stubs/
+│
+├── grpc-wrap/                # gRPC — response wrapping (single file + directory)
+│   ├── countries.proto
+│   ├── apitwin.toml
+│   └── stubs/
+│
+└── wrap-test/                # HTTP — response wrapping with full CRUD
+    ├── config.toml
     └── stubs/
 ```
 
@@ -559,6 +568,90 @@ grpcurl -plaintext \
 Reset: `git checkout examples/grpc-directory-persist/stubs/items/`
 
 **Features:** Each item is one file, protobuf field mapping (`item_id` ↔ `itemId`), unlimited scalability.
+
+---
+
+## grpc-wrap
+
+Response wrapping for gRPC. Stub files store flat objects (e.g. `{"code": "morocco", "name": "Morocco", "continent": "africa"}`), but the `wrap` field wraps them into the proto message shape (e.g. `{"country": {"code": "morocco", ...}}`).
+
+```sh
+apitwin --config examples/grpc-wrap \
+      --grpc-proto examples/grpc-wrap/countries.proto
+```
+
+**GetCountry (single-file wrap):**
+
+```sh
+# File contains {"code":"morocco","name":"Morocco","continent":"africa"}
+# Response: {"country": {"code":"morocco","name":"Morocco","continent":"africa"}}
+grpcurl -plaintext -d '{"country_code":"morocco"}' \
+  localhost:50051 geo.CountryService/GetCountry
+```
+
+**ListCountries (directory wrap):**
+
+```sh
+# Aggregates all files in stubs/countries/ into {"countries": [...]}
+grpcurl -plaintext -d '{}' \
+  localhost:50051 geo.CountryService/ListCountries
+```
+
+**CreateCountry:**
+
+```sh
+grpcurl -plaintext \
+  -d '{"code":"canada","name":"Canada","continent":"north-america"}' \
+  localhost:50051 geo.CountryService/CreateCountry
+```
+
+**UpdateCountry:**
+
+```sh
+grpcurl -plaintext \
+  -d '{"country_code":"morocco","name":"Kingdom of Morocco"}' \
+  localhost:50051 geo.CountryService/UpdateCountry
+```
+
+**DeleteCountry:**
+
+```sh
+grpcurl -plaintext -d '{"country_code":"canada"}' \
+  localhost:50051 geo.CountryService/DeleteCountry
+```
+
+Reset: `git checkout examples/grpc-wrap/stubs/countries/`
+
+**Key concept:** The `wrap` field works for both single files and directories. Files on disk stay flat — wrapping is applied only in the response.
+
+---
+
+## wrap-test
+
+HTTP response wrapping with full CRUD. Same concept as `grpc-wrap` but for HTTP routes.
+
+```sh
+apitwin --config examples/wrap-test
+```
+
+```sh
+# GET single — returns {"country": {"code":"morocco","name":"Morocco","continent":"africa"}}
+http :4000/countries/morocco
+
+# LIST — returns {"countries": [{...}]}
+http :4000/countries
+
+# CREATE — returns {"country": {"code":"canada",...}}
+http POST :4000/countries code=canada name=Canada continent=north-america
+
+# UPDATE — returns {"country": {"code":"morocco",...}}
+http PATCH :4000/countries/morocco name="Kingdom of Morocco"
+
+# DELETE
+http DELETE :4000/countries/canada
+```
+
+Reset: `git checkout examples/wrap-test/stubs/countries/`
 
 ---
 

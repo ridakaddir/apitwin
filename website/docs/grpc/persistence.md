@@ -90,9 +90,24 @@ All persist operations return an empty proto response (`{}`). The gRPC status co
 
 ---
 
+## Response wrapping
+
+Use the `wrap` field to wrap persist responses. The file on disk stays flat, but the API response is wrapped:
+
+```toml
+  [grpc_routes.cases.country]
+  file = "stubs/countries/{body.countryCode}.json"
+  wrap = "country"              # response: {"country": {...}}
+```
+
+See [Configuration — Response wrapping](config.md#single-file-wrapping) for details.
+
+---
+
 ## Example
 
 See [`examples/grpc-directory-persist/`](../../examples/grpc-directory-persist/) for a complete working example.
+See [`examples/grpc-wrap/`](../../examples/grpc-wrap/) for an example with response wrapping.
 
 ---
 
