@@ -261,6 +261,28 @@ defaults = "stubs/defaults/country.json"
 
 ---
 
+## Response wrapping
+
+Use the `wrap` field to wrap responses in a named key. Files on disk stay flat — wrapping is applied only in the response.
+
+```toml
+# GET /api/countries/:code → {"country": {"code": "morocco", "name": "Morocco", ...}}
+[routes.cases.get]
+file = "stubs/countries/{path.code}.json"
+wrap = "country"
+
+# GET /api/countries → {"countries": [{...}, ...]}
+[routes.cases.list]
+file = "stubs/countries/"
+wrap = "countries"
+```
+
+Wrapping also applies to `persist` responses (`append` and `update`), so create and update operations return the wrapped shape while the file stays flat.
+
+See [`examples/wrap-test/`](../../examples/wrap-test/) for a complete HTTP example and [`examples/grpc-wrap/`](../../examples/grpc-wrap/) for gRPC.
+
+---
+
 ## Benefits
 
 - **Single source of truth** — each resource is one file

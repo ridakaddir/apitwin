@@ -239,7 +239,7 @@ func (h *handler) loadStub(c config.Case, reqMap map[string]interface{}, md *des
 				wrapKey = h.registry.FindRepeatedField(md)
 			}
 			if wrapKey != "" {
-				b = wrapJSONArray(wrapKey, b)
+				b = wrapJSON(wrapKey, b)
 			}
 			return b, nil
 		}
@@ -248,6 +248,9 @@ func (h *handler) loadStub(c config.Case, reqMap map[string]interface{}, md *des
 		b, err := os.ReadFile(filePath)
 		if err != nil {
 			return nil, fmt.Errorf("reading stub file %q: %w", filePath, err)
+		}
+		if c.Wrap != "" {
+			b = wrapJSON(c.Wrap, b)
 		}
 		return b, nil
 
@@ -394,8 +397,8 @@ func mapToJSONBytes(m map[string]interface{}) []byte {
 	return b
 }
 
-// wrapJSONArray wraps a JSON array into an object: {"key": [...]}.
-func wrapJSONArray(key string, arrayJSON []byte) []byte {
+// wrapJSON wraps arbitrary JSON content into an object: {"key": <content>}.
+func wrapJSON(key string, arrayJSON []byte) []byte {
 	trimmed := bytes.TrimSpace(arrayJSON)
 	var buf bytes.Buffer
 	buf.WriteString(`{"`)

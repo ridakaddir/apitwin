@@ -107,7 +107,25 @@ fallback = "list"
 
 The `wrap` field takes precedence over auto-detection when both are present.
 
-> **Note:** For HTTP routes, directory aggregation returns a raw JSON array as before — `wrap` only applies to gRPC.
+### Single-file wrapping
+
+The `wrap` field also works with individual files (not just directories). This is useful when your stub file contains only the inner object but the response message wraps it in a named field:
+
+```toml
+# Stub file stubs/countries/morocco.json contains: {"code": "morocco", "name": "Morocco", "continent": "africa"}
+# → response becomes: {"country": {"code": "morocco", "name": "Morocco", "continent": "africa"}}
+[[grpc_routes]]
+match    = "/geo.CountryService/GetCountry"
+fallback = "ok"
+
+  [grpc_routes.cases.ok]
+  file = "stubs/countries/{body.country_code}.json"
+  wrap = "country"
+```
+
+> **Note:** Auto-detection from proto descriptors only applies to directory aggregation (repeated fields). Single-file wrapping requires an explicit `wrap` value.
+
+> **Note:** The `wrap` field also works with HTTP routes — both for directory aggregation and single files.
 
 ---
 

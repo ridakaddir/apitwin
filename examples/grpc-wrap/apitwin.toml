@@ -1,0 +1,80 @@
+# gRPC Response Wrapping Example
+#
+# Demonstrates the `wrap` field for gRPC responses. Each stub file stores a flat
+# object (e.g. {"code":"morocco", "name":"Morocco", ...}), but the response wraps
+# it into the proto message shape (e.g. {"country": {"code":"morocco", ...}}).
+#
+# Run:
+#   apitwin --config examples/grpc-wrap \
+#         --grpc-proto examples/grpc-wrap/countries.proto
+#
+# Try (requires grpcurl):
+#   grpcurl -plaintext -d '{"country_code":"morocco"}' localhost:50051 geo.CountryService/GetCountry
+#   grpcurl -plaintext -d '{}' localhost:50051 geo.CountryService/ListCountries
+#   grpcurl -plaintext -d '{"code":"canada","name":"Canada","continent":"north-america"}' localhost:50051 geo.CountryService/CreateCountry
+#   grpcurl -plaintext -d '{"country_code":"morocco","name":"Kingdom of Morocco"}' localhost:50051 geo.CountryService/UpdateCountry
+#   grpcurl -plaintext -d '{"country_code":"canada"}' localhost:50051 geo.CountryService/DeleteCountry
+
+# ─── GetCountry ───────────────────────────────────────────────────────────────
+# Single-file wrap: file has flat {"code":"morocco",...}, wrap adds {"country": {...}}
+
+[[grpc_routes]]
+match    = "/geo.CountryService/GetCountry"
+fallback = "ok"
+
+  [grpc_routes.cases.ok]
+  file = "stubs/countries/{body.country_code}.json"
+  wrap = "country"
+
+  [grpc_routes.cases.not_found]
+  status = 5
+  json   = '{"message": "country not found"}'
+
+# ─── ListCountries ────────────────────────────────────────────────────────────
+# Directory wrap: aggregates files into array, wraps into {"countries": [...]}
+# Auto-detection would also work here (ListCountriesResponse has one repeated
+# field), but explicit wrap is shown for clarity.
+
+[[grpc_routes]]
+match    = "/geo.CountryService/ListCountries"
+fallback = "list"
+
+  [grpc_routes.cases.list]
+  file = "stubs/countries/"
+  wrap = "countries"
+
+# ─── CreateCountry ────────────────────────────────────────────────────────────
+# Append to directory + wrap the response
+
+[[grpc_routes]]
+match    = "/geo.CountryService/CreateCountry"
+fallback = "created"
+
+  [grpc_routes.cases.created]
+  file    = "stubs/countries/"
+  persist = true
+  merge   = "append"
+  key     = "code"
+
+# ─── UpdateCountry ────────────────────────────────────────────────────────────
+# Update file + wrap the response
+
+[[grpc_routes]]
+match    = "/geo.CountryService/UpdateCountry"
+fallback = "updated"
+
+  [grpc_routes.cases.updated]
+  file    = "stubs/countries/{body.country_code}.json"
+  persist = true
+  merge   = "update"
+
+# ─── DeleteCountry ────────────────────────────────────────────────────────────
+
+[[grpc_routes]]
+match    = "/geo.CountryService/DeleteCountry"
+fallback = "deleted"
+
+  [grpc_routes.cases.deleted]
+  file    = "stubs/countries/{body.country_code}.json"
+  persist = true
+  merge   = "delete"

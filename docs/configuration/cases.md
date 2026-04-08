@@ -18,7 +18,7 @@ Cases are named response definitions attached to a route. Each route can have mu
 | `merge` | string | — | `update`, `append`, or `delete` (requires `persist: true`) |
 | `key` | string | — | Field name for filename when using `append` with directories (resolved from body, path params, or query — see [directory stubs](../features/directory-stubs.md#key-resolution-for-filenames)) |
 | `defaults` | string | — | JSON file with default values for `append`/`update` operations |
-| `wrap` | string | — | Wrap directory aggregation array into `{"field": [...]}` (gRPC only; auto-detected from proto if omitted) |
+| `wrap` | string | — | Wrap response into `{"field": <content>}` — works with both directories and single files; for gRPC directories, auto-detected from proto if omitted |
 
 ---
 
@@ -67,13 +67,26 @@ When `file` points to a directory (trailing `/`), apitwin aggregates all `.json`
 file = "stubs/countries/"    # returns array of all files in stubs/countries/
 ```
 
-For gRPC routes, the array is automatically wrapped into the response message's `repeated` field (e.g. `{"countries": [...]}`). Use the `wrap` field to override auto-detection:
+For gRPC routes, the array is automatically wrapped into the response message's `repeated` field (e.g. `{"countries": [...]}`). Use the `wrap` field to override auto-detection or to wrap HTTP responses:
 
 ```toml
 [grpc_routes.cases.list]
 file = "stubs/countries/"
 wrap = "countries"           # wraps into {"countries": [...]}
 ```
+
+### Response wrapping (single files)
+
+The `wrap` field also works with individual files. The file stores a flat object, but the response wraps it in a named field:
+
+```toml
+# File contains {"code": "morocco", ...} → response: {"country": {"code": "morocco", ...}}
+[routes.cases.get]
+file = "stubs/countries/{path.code}.json"
+wrap = "country"
+```
+
+This works for both HTTP and gRPC routes. Wrapping is also applied to `persist` responses (`append` and `update`), so the file on disk stays flat while the API response is wrapped.
 
 ---
 

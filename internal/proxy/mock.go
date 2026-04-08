@@ -80,6 +80,11 @@ func serveMock(w http.ResponseWriter, r *http.Request, c config.Case, bodyBytes 
 			return
 		}
 
+		// Wrap response into {"field": <content>} if configured.
+		if c.Wrap != "" {
+			body = wrapJSON(c.Wrap, body)
+		}
+
 	case c.JSON != "":
 		// Resolve cross-references first
 		resolved, err := resolveRefsWithContext([]byte(c.JSON), configDir, visited, refCtx)
@@ -190,6 +195,18 @@ func isFileMissing(w http.ResponseWriter) bool {
 // clearFileMissing removes the internal signal header before sending to client.
 func clearFileMissing(w http.ResponseWriter) {
 	w.Header().Del("X-Mockr-File-Missing")
+}
+
+// wrapJSON wraps arbitrary JSON content into an object: {"key": <content>}.
+func wrapJSON(key string, raw []byte) []byte {
+	trimmed := bytes.TrimSpace(raw)
+	var buf bytes.Buffer
+	buf.WriteString(`{"`)
+	buf.WriteString(key)
+	buf.WriteString(`":`)
+	buf.Write(trimmed)
+	buf.WriteString("}\n")
+	return buf.Bytes()
 }
 
 // indentJSON pretty-prints raw JSON bytes.
