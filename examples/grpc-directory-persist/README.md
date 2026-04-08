@@ -72,4 +72,4 @@ Each file contains the JSON representation of an Item protobuf message.
 - **protojson conversion** - Request/response automatically converted between protobuf and JSON
 - **Field name mapping** - Supports both `item_id` (proto) and `itemId` (JSON) field names
 - **Status codes** - Returns appropriate gRPC status codes (OK, NOT_FOUND, etc.)
-- **Empty responses** - Delete operations return empty protobuf messages as expected
+- **Persist responses** - Update and append return the persisted data; delete returns an empty message

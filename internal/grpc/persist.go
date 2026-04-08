@@ -17,76 +17,113 @@ import (
 
 // applyGRPCPersist handles persist operations for a matched gRPC route case.
 // It mutates the stub file on disk (append / replace / delete), logs the result,
-// and returns (grpcCode, handled). The caller always sends an empty proto message
-// on success — unary gRPC requires exactly one response frame.
+// and returns (grpcCode, handled, responseData). The caller encodes responseData
+// into the proto wire format and sends it back to the client.
 func (h *handler) applyGRPCPersist(
 	c config.Case,
 	reqMap map[string]interface{},
 	start time.Time,
 	fullMethod string,
-) (code codes.Code, handled bool) {
+) (code codes.Code, handled bool, result map[string]interface{}) {
 	configDir := h.loader.ConfigDir()
 	filePath := resolveGRPCFilePath(c.File, reqMap, configDir)
 
-	// Note: Persist operations return the updated/created data but we ignore it
-	// because the gRPC handler sends an empty response for persist operations.
-	// This is by design - persist-enabled RPCs should use empty response messages.
+	// Strip fields used as {body.*} path placeholders so they don't leak
+	// into the persisted stub (they are routing fields, not data fields).
+	// persistData is what gets stored; reqMap (unfiltered) is still passed to
+	// loadGRPCDefaults for template lookups since defaults may reference routing fields.
+	persistData := stripPathPlaceholderFields(c.File, reqMap)
+
 	switch strings.ToLower(c.Merge) {
 
 	case "update":
 		// Apply defaults if specified (enrich incoming data before persisting).
-		reqMap = loadGRPCDefaults(c.Defaults, reqMap, reqMap, configDir)
-		if _, err := persist.Update(filePath, reqMap); err != nil {
+		persistData = loadGRPCDefaults(c.Defaults, persistData, reqMap, configDir)
+		updated, err := persist.Update(filePath, persistData)
+		if err != nil {
 			if persist.IsNotFound(err) {
 				logger.LogGRPC(fullMethod, codes.NotFound, time.Since(start), logger.SourceStub)
-				return codes.NotFound, true
+				return codes.NotFound, true, nil
 			}
 			if persist.IsConfigError(err) {
 				logger.Error("grpc persist update config error", "file", filePath, "err", err)
 				logger.LogGRPC(fullMethod, codes.InvalidArgument, time.Since(start), logger.SourceStub)
-				return codes.InvalidArgument, true
+				return codes.InvalidArgument, true, nil
 			}
 			logger.Error("grpc persist update", "file", filePath, "err", err)
 			logger.LogGRPC(fullMethod, codes.Internal, time.Since(start), logger.SourceStub)
-			return codes.Internal, true
+			return codes.Internal, true, nil
 		}
 		logger.LogGRPC(fullMethod, codes.OK, time.Since(start), logger.SourceStub)
-		return codes.OK, true
+		if c.Wrap != "" {
+			return codes.OK, true, map[string]interface{}{c.Wrap: updated}
+		}
+		return codes.OK, true, updated
 
 	case "append":
 		if !isGRPCDirectoryPath(filePath, c.File) {
 			logger.Error("grpc persist append", "file", filePath, "err", "append requires directory path")
 			logger.LogGRPC(fullMethod, codes.InvalidArgument, time.Since(start), logger.SourceStub)
-			return codes.InvalidArgument, true
+			return codes.InvalidArgument, true, nil
 		}
 		// Apply defaults if specified (enrich incoming data before persisting).
-		reqMap = loadGRPCDefaults(c.Defaults, reqMap, reqMap, configDir)
-		if _, _, err := persist.AppendToDir(filePath, c.Key, reqMap); err != nil {
+		persistData = loadGRPCDefaults(c.Defaults, persistData, reqMap, configDir)
+		_, appended, err := persist.AppendToDir(filePath, c.Key, persistData)
+		if err != nil {
 			logger.Error("grpc persist append to dir", "dir", filePath, "err", err)
 			logger.LogGRPC(fullMethod, codes.Internal, time.Since(start), logger.SourceStub)
-			return codes.Internal, true
+			return codes.Internal, true, nil
 		}
 		logger.LogGRPC(fullMethod, codes.OK, time.Since(start), logger.SourceStub)
-		return codes.OK, true
+		if c.Wrap != "" {
+			return codes.OK, true, map[string]interface{}{c.Wrap: appended}
+		}
+		return codes.OK, true, appended
 
 	case "delete":
 		if err := persist.DeleteFile(filePath); err != nil {
 			if persist.IsNotFound(err) {
 				logger.LogGRPC(fullMethod, codes.NotFound, time.Since(start), logger.SourceStub)
-				return codes.NotFound, true
+				return codes.NotFound, true, nil
 			}
 			logger.Error("grpc persist delete file", "file", filePath, "err", err)
 			logger.LogGRPC(fullMethod, codes.Internal, time.Since(start), logger.SourceStub)
-			return codes.Internal, true
+			return codes.Internal, true, nil
 		}
 		logger.LogGRPC(fullMethod, codes.OK, time.Since(start), logger.SourceStub)
-		return codes.OK, true
+		return codes.OK, true, nil
 
 	default:
 		logger.Warn("grpc persist: unknown merge strategy", "merge", c.Merge)
 		logger.LogGRPC(fullMethod, codes.Internal, time.Since(start), logger.SourceStub)
-		return codes.Internal, true
+		return codes.Internal, true, nil
 	}
+}
+
+// stripPathPlaceholderFields returns a shallow copy of reqMap with fields used as
+// {body.*} placeholders in the file path removed. This prevents routing fields
+// (e.g. country_code from {body.country_code}) from leaking into persisted stubs.
+func stripPathPlaceholderFields(filePattern string, reqMap map[string]interface{}) map[string]interface{} {
+	matches := grpcPlaceholderRe.FindAllStringSubmatch(filePattern, -1)
+	if len(matches) == 0 {
+		return reqMap
+	}
+
+	// Collect placeholder field names and their camelCase variants.
+	exclude := make(map[string]bool, len(matches)*2)
+	for _, m := range matches {
+		field := m[1]
+		exclude[field] = true
+		exclude[snakeToCamel(field)] = true
+	}
+
+	filtered := make(map[string]interface{}, len(reqMap))
+	for k, v := range reqMap {
+		if !exclude[k] {
+			filtered[k] = v
+		}
+	}
+	return filtered
 }
 
 // isGRPCDirectoryPath determines if a file path should be treated as a directory.

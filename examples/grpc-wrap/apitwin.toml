@@ -44,9 +44,8 @@ fallback = "list"
   wrap = "countries"
 
 # ─── CreateCountry ────────────────────────────────────────────────────────────
-# Append to directory. Note: gRPC persist returns an empty proto response by
-# design — the gRPC status code signals success or failure. The wrap field has
-# no effect on gRPC persist operations.
+# Append to directory. The wrap field wraps the persisted data into the proto
+# response shape (e.g. {"country": {...}}).
 
 [[grpc_routes]]
 match    = "/geo.CountryService/CreateCountry"
@@ -57,6 +56,7 @@ fallback = "created"
   persist = true
   merge   = "append"
   key     = "code"
+  wrap    = "country"
 
 # ─── UpdateCountry ────────────────────────────────────────────────────────────
 # Update file on disk.
@@ -69,6 +69,7 @@ fallback = "updated"
   file    = "stubs/countries/{body.country_code}.json"
   persist = true
   merge   = "update"
+  wrap    = "country"
 
 # ─── DeleteCountry ────────────────────────────────────────────────────────────
 
