@@ -82,7 +82,7 @@ func applyPersist(w http.ResponseWriter, r *http.Request, c config.Case, bodyByt
 		}
 		logger.SetSource(w, logger.SourceStub)
 		if c.Wrap != "" {
-			writeJSON(w, c.StatusCode(), map[string]interface{}{c.Wrap: updated})
+			writeJSON(w, c.StatusCode(), map[string]any{c.Wrap: updated})
 		} else {
 			writeJSON(w, c.StatusCode(), updated)
 		}
@@ -128,7 +128,7 @@ func applyPersist(w http.ResponseWriter, r *http.Request, c config.Case, bodyByt
 		}
 		logger.SetSource(w, logger.SourceStub)
 		if c.Wrap != "" {
-			writeJSON(w, c.StatusCode(), map[string]interface{}{c.Wrap: result})
+			writeJSON(w, c.StatusCode(), map[string]any{c.Wrap: result})
 		} else {
 			writeJSON(w, c.StatusCode(), result)
 		}
