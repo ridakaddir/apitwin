@@ -123,7 +123,7 @@ func (h *handler) serve(srv interface{}, stream grpc.ServerStream) error {
 
 		// Persist (stateful mutations) — handled before delay/stub-load.
 		if c.Persist {
-			grpcCode, ok, persistResult := h.applyGRPCPersist(c, reqMap, start, fullMethod)
+			grpcCode, ok, persistResult := h.applyGRPCPersist(c, reqMap, start, fullMethod, md)
 			if ok {
 				// Encode the persist result into proto wire format and send it
 				// back so the client receives the updated/created data.
