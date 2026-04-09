@@ -66,7 +66,8 @@ func (h *handler) applyGRPCPersist(
 		updated, err := persist.Update(filePath, persistData)
 		if err != nil {
 			if persist.IsNotFound(err) {
-				logger.LogGRPC(fullMethod, codes.NotFound, time.Since(start), logger.SourceStub)
+				// LogGRPC deferred to caller — handler may retry with
+				// the fallback case on a transition 404.
 				return codes.NotFound, true, nil, ""
 			}
 			if persist.IsConfigError(err) {
@@ -115,7 +116,7 @@ func (h *handler) applyGRPCPersist(
 			return codes.Internal, true, nil, ""
 		}
 		logger.LogGRPC(fullMethod, codes.OK, time.Since(start), logger.SourceStub)
-		return codes.OK, true, nil, filePath
+		return codes.OK, true, nil, ""
 
 	default:
 		logger.Warn("grpc persist: unknown merge strategy", "merge", c.Merge)

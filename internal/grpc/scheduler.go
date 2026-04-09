@@ -80,6 +80,13 @@ func (s *grpcTransitionScheduler) Schedule(route *config.GRPCRoute, filePath, co
 	}
 }
 
+// schedule spawns a single goroutine that waits for delay, then applies
+// the case's defaults to the file via persist.Update.
+//
+// NOTE: unlike the HTTP proxy scheduler, no request context (refCtx) is
+// passed here. gRPC defaults use renderGRPCTemplate which handles {{uuid}},
+// {{now}}, etc. If future defaults files need request-scoped placeholders,
+// a gRPC equivalent of RefContext will be needed.
 func (s *grpcTransitionScheduler) schedule(delay time.Duration, filePath string, c config.Case, configDir string) {
 	s.mu.Lock()
 	gen := s.gen

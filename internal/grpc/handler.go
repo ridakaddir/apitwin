@@ -126,7 +126,8 @@ func (h *handler) serve(srv interface{}, stream grpc.ServerStream) error {
 
 		// Persist (stateful mutations) — handled before delay/stub-load.
 		if c.Persist {
-			grpcCode, ok, persistResult, persistedPath := h.applyGRPCPersist(c, reqMap, start, fullMethod, md)
+			activeCase := c
+			grpcCode, ok, persistResult, persistedPath := h.applyGRPCPersist(activeCase, reqMap, start, fullMethod, md)
 			if ok {
 				// When a transition-resolved "update" case returns NotFound
 				// (file doesn't exist for a new resource), fall back to the
@@ -134,23 +135,32 @@ func (h *handler) serve(srv interface{}, stream grpc.ServerStream) error {
 				isTransitionCase := caseName != route.Fallback && len(route.Transitions) > 0
 				if grpcCode == codes.NotFound && isTransitionCase {
 					if fc, fbOK := route.Cases[route.Fallback]; fbOK && fc.Persist {
-						grpcCode, ok, persistResult, persistedPath = h.applyGRPCPersist(fc, reqMap, start, fullMethod, md)
+						activeCase = fc
+						grpcCode, ok, persistResult, persistedPath = h.applyGRPCPersist(activeCase, reqMap, start, fullMethod, md)
 						if !ok {
 							break
 						}
+					} else {
+						// No fallback available — log the NotFound now.
+						logger.LogGRPC(fullMethod, codes.NotFound, time.Since(start), logger.SourceStub)
 					}
+				} else if grpcCode == codes.NotFound {
+					// Non-transition NotFound (e.g. update on missing file).
+					logger.LogGRPC(fullMethod, codes.NotFound, time.Since(start), logger.SourceStub)
 				}
 
 				// Schedule deferred background mutations so the persisted
 				// file transitions on disk over time (e.g. Queued → Ready).
-				if persistedPath != "" && len(route.Transitions) > 0 && h.scheduler != nil {
+				// Only after append (resource creation) — mirrors HTTP proxy.
+				if persistedPath != "" && strings.EqualFold(activeCase.Merge, "append") &&
+					len(route.Transitions) > 0 && h.scheduler != nil {
 					h.scheduler.Schedule(route, persistedPath, h.loader.ConfigDir())
 				}
 
 				// When a DELETE removes a resource, reset transition state so
 				// subsequent creates use the fallback case, not the terminal
 				// transition case.
-				if strings.EqualFold(c.Merge, "delete") {
+				if strings.EqualFold(activeCase.Merge, "delete") {
 					h.transitions.ResetMatch(route.Match)
 				}
 
