@@ -213,8 +213,12 @@ func loadGRPCDefaults(defaults string, incoming map[string]interface{},
 }
 
 // resolveGRPCFilePath resolves {body.field} placeholders in the file path and
-// makes it absolute relative to configDir.
+// makes it absolute relative to configDir.  Dot-notation is supported for
+// nested fields, e.g. {body.service.name} walks reqMap["service"]["name"].
 var grpcPlaceholderRe = regexp.MustCompile(`\{body\.([^}]+)\}`)
+
+// grpcPathSanitizeRe matches characters unsafe for file-path segments.
+var grpcPathSanitizeRe = regexp.MustCompile(`[^a-zA-Z0-9_\-.]`)
 
 func resolveGRPCFilePath(filePath string, reqMap map[string]interface{}, configDir string) string {
 	if grpcPlaceholderRe.MatchString(filePath) {
@@ -224,11 +228,8 @@ func resolveGRPCFilePath(filePath string, reqMap map[string]interface{}, configD
 				return match
 			}
 			field := sub[1]
-			for _, key := range []string{field, snakeToCamel(field)} {
-				if v, ok := reqMap[key]; ok {
-					s := fmt.Sprintf("%v", v)
-					return regexp.MustCompile(`[^a-zA-Z0-9_\-.]`).ReplaceAllString(s, "_")
-				}
+			if val, ok := walkNestedField(reqMap, field); ok {
+				return grpcPathSanitizeRe.ReplaceAllString(val, "_")
 			}
 			return match
 		})
@@ -237,4 +238,45 @@ func resolveGRPCFilePath(filePath string, reqMap map[string]interface{}, configD
 		filePath = filepath.Join(configDir, filePath)
 	}
 	return filePath
+}
+
+// walkNestedField walks a dot-notation path through a map[string]interface{},
+// trying each segment as-is first then as camelCase.  Returns the string
+// representation of the leaf value.
+func walkNestedField(reqMap map[string]interface{}, dotPath string) (string, bool) {
+	parts := strings.Split(dotPath, ".")
+	var current interface{} = reqMap
+	for _, part := range parts {
+		m, ok := current.(map[string]interface{})
+		if !ok {
+			return "", false
+		}
+		v, exists := m[part]
+		if !exists {
+			v, exists = m[snakeToCamel(part)]
+			if !exists {
+				return "", false
+			}
+		}
+		current = v
+	}
+	switch v := current.(type) {
+	case string:
+		return v, true
+	case float64:
+		return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%f", v), "0"), "."), true
+	case bool:
+		if v {
+			return "true", true
+		}
+		return "false", true
+	case nil:
+		return "", false
+	default:
+		b, err := json.Marshal(v)
+		if err != nil {
+			return "", false
+		}
+		return string(b), true
+	}
 }

@@ -78,6 +78,22 @@ fallback = "ok"
 
 Both snake_case (`country_code`) and camelCase (`countryCode`) field names are matched automatically. Characters unsafe for filenames are replaced with `_`.
 
+Nested dot-paths are supported for fields inside sub-messages:
+
+```toml
+[[grpc_routes]]
+match    = "/geo.CountryService/UpdateCountry"
+fallback = "updated"
+
+  [grpc_routes.cases.updated]
+  file    = "stubs/countries/{body.country.code}.json"
+  persist = true
+  merge   = "update"
+  wrap    = "country"
+```
+
+This resolves `{body.country.code}` by walking into the `country` field of the request and reading its `code` field. Arbitrary depth is supported (e.g. `{body.a.b.c}`).
+
 ---
 
 ## Directory wrapping
