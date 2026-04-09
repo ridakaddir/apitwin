@@ -216,10 +216,16 @@ func (h *handler) resolveCase(route *config.GRPCRoute, reqMap map[string]interfa
 		}
 	}
 
-	// 2. Transitions.
+	// 2. Transitions — resolve by elapsed time since first request.
+	// Only use the transition result if the case actually exists in the route;
+	// routes that define transitions purely for background scheduling (e.g. POST
+	// routes with deferred mutations) may have transition case names that don't
+	// correspond to request-time cases.
 	if len(route.Transitions) > 0 {
 		if caseName := h.transitions.resolve(route); caseName != "" {
-			return caseName
+			if _, ok := route.Cases[caseName]; ok {
+				return caseName
+			}
 		}
 	}
 
