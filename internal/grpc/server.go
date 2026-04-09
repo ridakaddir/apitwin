@@ -105,6 +105,7 @@ func (s *Server) Start(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		s.srv.GracefulStop()
+		s.Stop()
 		return nil
 	case err := <-errCh:
 		return err
@@ -115,6 +116,13 @@ func (s *Server) Start(ctx context.Context) error {
 // Called from the config loader's onChange callback.
 func (s *Server) NotifyReload() {
 	s.handler.resetTransitions()
+	s.handler.scheduler.Reset(context.Background())
+}
+
+// Stop cancels pending transition schedulers and waits for goroutines to finish.
+// Called on server shutdown.
+func (s *Server) Stop() {
+	s.handler.scheduler.Stop()
 }
 
 // protoServiceInfoProvider satisfies reflection.ServiceInfoProvider using our

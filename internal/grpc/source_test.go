@@ -99,7 +99,7 @@ func TestApplyGRPCPersist_SourceExtractsNestedField(t *testing.T) {
 		},
 	}
 
-	code, handled, result := h.applyGRPCPersist(c, reqMap, time.Now(),
+	code, handled, result, _ := h.applyGRPCPersist(c, reqMap, time.Now(),
 		"/geo.CityService/UpdateCity", nil)
 
 	if !handled {
@@ -182,7 +182,7 @@ func TestApplyGRPCPersist_SourceMultipleFieldsUpdated(t *testing.T) {
 		},
 	}
 
-	code, handled, _ := h.applyGRPCPersist(c, reqMap, time.Now(),
+	code, handled, _, _ := h.applyGRPCPersist(c, reqMap, time.Now(),
 		"/geo.CityService/UpdateCity", nil)
 
 	if !handled || code != codes.OK {
@@ -249,7 +249,7 @@ func TestApplyGRPCPersist_WithoutSourceLeaksMetadata(t *testing.T) {
 		},
 	}
 
-	code, handled, _ := h.applyGRPCPersist(c, reqMap, time.Now(),
+	code, handled, _, _ := h.applyGRPCPersist(c, reqMap, time.Now(),
 		"/geo.CityService/UpdateCityRaw", nil)
 
 	if !handled || code != codes.OK {
@@ -315,7 +315,7 @@ func TestApplyGRPCPersist_SourceDeepNestedPath(t *testing.T) {
 		},
 	}
 
-	code, handled, result := h.applyGRPCPersist(c, reqMap, time.Now(),
+	code, handled, result, _ := h.applyGRPCPersist(c, reqMap, time.Now(),
 		"/geo.TerrainService/UpdateSummit", nil)
 
 	if !handled || code != codes.OK {
