@@ -2,8 +2,6 @@ package grpc
 
 import (
 	"testing"
-
-	"github.com/jhump/protoreflect/desc/protoparse" //nolint:staticcheck
 )
 
 // loadTestRegistry parses the example countries.proto and returns a Registry
@@ -72,26 +70,10 @@ func TestEntityFieldNames_NonMatchingWrap(t *testing.T) {
 	}
 }
 
-func TestEntityFieldNames_ScalarField(t *testing.T) {
-	// DeleteCountryResponse has no fields, so wrapping a non-existent field
-	// or a scalar should return nil.
-	p := protoparse.Parser{
-		InferImportPaths: true,
-		ImportPaths:      []string{"../../examples/grpc-wrap"},
-	}
-	fds, err := p.ParseFiles("countries.proto")
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	// GetCountryRequest has string country_code = 1 (scalar, not a message).
-	// We'll test EntityFieldNames on GetCountry whose response wraps "country" (message).
-	// To test scalar, use a wrap name that matches a scalar field — but
-	// GetCountryResponse only has "country" (message). Let's just verify that
-	// looking for a scalar field in a different context returns nil.
-	_ = fds
+func TestEntityFieldNames_EmptyResponseMessage(t *testing.T) {
 	reg := loadTestRegistry(t)
+	// DeleteCountryResponse has no fields at all.
 	md, _ := reg.FindMethod("/geo.CountryService/DeleteCountry")
-	// DeleteCountryResponse is empty — no fields at all.
 	if got := reg.EntityFieldNames(md, "anything"); got != nil {
 		t.Errorf("expected nil for empty response message, got %v", got)
 	}

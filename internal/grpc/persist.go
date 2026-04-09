@@ -118,7 +118,7 @@ func filterToEntityFields(data map[string]interface{}, allowed map[string]bool) 
 	if allowed == nil {
 		return data
 	}
-	filtered := make(map[string]interface{}, len(allowed))
+	filtered := make(map[string]interface{}, len(data))
 	for k, v := range data {
 		if allowed[k] {
 			filtered[k] = v
