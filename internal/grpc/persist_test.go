@@ -132,3 +132,151 @@ func TestFilterToEntityFields_EmptyData(t *testing.T) {
 		t.Errorf("expected empty map, got %v", got)
 	}
 }
+
+// -----------------------------------------------------------------------
+// walkNestedField
+// -----------------------------------------------------------------------
+
+func TestWalkNestedField_TopLevel(t *testing.T) {
+	m := map[string]interface{}{"name": "alpha"}
+	val, ok := walkNestedField(m, "name")
+	if !ok || val != "alpha" {
+		t.Errorf("got %q, %v", val, ok)
+	}
+}
+
+func TestWalkNestedField_Nested(t *testing.T) {
+	m := map[string]interface{}{
+		"service": map[string]interface{}{"name": "my-svc"},
+	}
+	val, ok := walkNestedField(m, "service.name")
+	if !ok || val != "my-svc" {
+		t.Errorf("got %q, %v", val, ok)
+	}
+}
+
+func TestWalkNestedField_DeeplyNested(t *testing.T) {
+	m := map[string]interface{}{
+		"a": map[string]interface{}{
+			"b": map[string]interface{}{
+				"c": "deep",
+			},
+		},
+	}
+	val, ok := walkNestedField(m, "a.b.c")
+	if !ok || val != "deep" {
+		t.Errorf("got %q, %v", val, ok)
+	}
+}
+
+func TestWalkNestedField_CamelCaseFallback(t *testing.T) {
+	m := map[string]interface{}{
+		"serviceConfig": map[string]interface{}{"displayName": "Test"},
+	}
+	val, ok := walkNestedField(m, "service_config.display_name")
+	if !ok || val != "Test" {
+		t.Errorf("got %q, %v", val, ok)
+	}
+}
+
+func TestWalkNestedField_NotFound(t *testing.T) {
+	m := map[string]interface{}{"a": "b"}
+	_, ok := walkNestedField(m, "x.y")
+	if ok {
+		t.Error("expected not found")
+	}
+}
+
+func TestWalkNestedField_NumericValue(t *testing.T) {
+	m := map[string]interface{}{"id": float64(42)}
+	val, ok := walkNestedField(m, "id")
+	if !ok || val != "42" {
+		t.Errorf("got %q, %v", val, ok)
+	}
+}
+
+func TestWalkNestedField_BoolValue(t *testing.T) {
+	m := map[string]interface{}{"active": true}
+	val, ok := walkNestedField(m, "active")
+	if !ok || val != "true" {
+		t.Errorf("got %q, %v", val, ok)
+	}
+}
+
+func TestWalkNestedField_NilValue(t *testing.T) {
+	m := map[string]interface{}{"empty": nil}
+	_, ok := walkNestedField(m, "empty")
+	if ok {
+		t.Error("expected not found for nil")
+	}
+}
+
+// -----------------------------------------------------------------------
+// resolveGRPCFilePath
+// -----------------------------------------------------------------------
+
+func TestResolveGRPCFilePath_TopLevel(t *testing.T) {
+	reqMap := map[string]interface{}{"name": "alpha"}
+	got := resolveGRPCFilePath("stubs/{body.name}.json", reqMap, "")
+	if got != "stubs/alpha.json" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestResolveGRPCFilePath_NestedDotPath(t *testing.T) {
+	reqMap := map[string]interface{}{
+		"service": map[string]interface{}{"name": "my-svc"},
+	}
+	got := resolveGRPCFilePath("stubs/{body.service.name}.json", reqMap, "")
+	if got != "stubs/my-svc.json" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestResolveGRPCFilePath_DeeplyNested(t *testing.T) {
+	reqMap := map[string]interface{}{
+		"a": map[string]interface{}{
+			"b": map[string]interface{}{"c": "val"},
+		},
+	}
+	got := resolveGRPCFilePath("stubs/{body.a.b.c}.json", reqMap, "")
+	if got != "stubs/val.json" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestResolveGRPCFilePath_SnakeCaseNested(t *testing.T) {
+	reqMap := map[string]interface{}{
+		"serviceConfig": map[string]interface{}{"displayName": "Test"},
+	}
+	got := resolveGRPCFilePath("stubs/{body.service_config.display_name}.json", reqMap, "")
+	if got != "stubs/Test.json" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestResolveGRPCFilePath_NotFound(t *testing.T) {
+	reqMap := map[string]interface{}{"a": "b"}
+	got := resolveGRPCFilePath("stubs/{body.x.y}.json", reqMap, "")
+	if got != "stubs/{body.x.y}.json" {
+		t.Errorf("expected placeholder unchanged, got %q", got)
+	}
+}
+
+func TestResolveGRPCFilePath_Sanitizes(t *testing.T) {
+	reqMap := map[string]interface{}{
+		"service": map[string]interface{}{"name": "bad/path/../name"},
+	}
+	got := resolveGRPCFilePath("stubs/{body.service.name}.json", reqMap, "")
+	if got != "stubs/bad_path_.._name.json" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestResolveGRPCFilePath_ConfigDir(t *testing.T) {
+	reqMap := map[string]interface{}{"id": "abc"}
+	got := resolveGRPCFilePath("stubs/{body.id}.json", reqMap, "/config")
+	if got != "/config/stubs/abc.json" {
+		t.Errorf("got %q", got)
+	}
+}
