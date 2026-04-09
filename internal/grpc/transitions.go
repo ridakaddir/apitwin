@@ -27,6 +27,15 @@ func (ts *grpcTransitionState) Reset() {
 	ts.firstHit = make(map[string]time.Time)
 }
 
+// ResetMatch clears the first-hit time for a specific match pattern.
+// Called when a DELETE removes a resource so that subsequent creates use the
+// fallback case instead of the terminal transition case.
+func (ts *grpcTransitionState) ResetMatch(matchPattern string) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	delete(ts.firstHit, matchPattern)
+}
+
 // resolve returns the active case name for a gRPC route with transitions.
 // Durations are relative: each entry's Duration specifies how long that state
 // lasts. They are accumulated into absolute thresholds at resolution time.

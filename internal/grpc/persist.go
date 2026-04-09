@@ -26,7 +26,7 @@ func (h *handler) applyGRPCPersist(
 	start time.Time,
 	fullMethod string,
 	md *desc.MethodDescriptor,
-) (code codes.Code, handled bool, result map[string]interface{}) {
+) (code codes.Code, handled bool, result map[string]interface{}, persistedPath string) {
 	configDir := h.loader.ConfigDir()
 	filePath := resolveGRPCFilePath(c.File, reqMap, configDir)
 
@@ -67,60 +67,60 @@ func (h *handler) applyGRPCPersist(
 		if err != nil {
 			if persist.IsNotFound(err) {
 				logger.LogGRPC(fullMethod, codes.NotFound, time.Since(start), logger.SourceStub)
-				return codes.NotFound, true, nil
+				return codes.NotFound, true, nil, ""
 			}
 			if persist.IsConfigError(err) {
 				logger.Error("grpc persist update config error", "file", filePath, "err", err)
 				logger.LogGRPC(fullMethod, codes.InvalidArgument, time.Since(start), logger.SourceStub)
-				return codes.InvalidArgument, true, nil
+				return codes.InvalidArgument, true, nil, ""
 			}
 			logger.Error("grpc persist update", "file", filePath, "err", err)
 			logger.LogGRPC(fullMethod, codes.Internal, time.Since(start), logger.SourceStub)
-			return codes.Internal, true, nil
+			return codes.Internal, true, nil, ""
 		}
 		logger.LogGRPC(fullMethod, codes.OK, time.Since(start), logger.SourceStub)
 		if c.Wrap != "" {
-			return codes.OK, true, map[string]interface{}{c.Wrap: updated}
+			return codes.OK, true, map[string]interface{}{c.Wrap: updated}, filePath
 		}
-		return codes.OK, true, updated
+		return codes.OK, true, updated, filePath
 
 	case "append":
 		if !isGRPCDirectoryPath(filePath, c.File) {
 			logger.Error("grpc persist append", "file", filePath, "err", "append requires directory path")
 			logger.LogGRPC(fullMethod, codes.InvalidArgument, time.Since(start), logger.SourceStub)
-			return codes.InvalidArgument, true, nil
+			return codes.InvalidArgument, true, nil, ""
 		}
 		// Apply defaults if specified (enrich incoming data before persisting).
 		persistData = loadGRPCDefaults(c.Defaults, persistData, reqMap, configDir)
-		_, appended, err := persist.AppendToDir(filePath, c.Key, persistData)
+		createdPath, appended, err := persist.AppendToDir(filePath, c.Key, persistData)
 		if err != nil {
 			logger.Error("grpc persist append to dir", "dir", filePath, "err", err)
 			logger.LogGRPC(fullMethod, codes.Internal, time.Since(start), logger.SourceStub)
-			return codes.Internal, true, nil
+			return codes.Internal, true, nil, ""
 		}
 		logger.LogGRPC(fullMethod, codes.OK, time.Since(start), logger.SourceStub)
 		if c.Wrap != "" {
-			return codes.OK, true, map[string]interface{}{c.Wrap: appended}
+			return codes.OK, true, map[string]interface{}{c.Wrap: appended}, createdPath
 		}
-		return codes.OK, true, appended
+		return codes.OK, true, appended, createdPath
 
 	case "delete":
 		if err := persist.DeleteFile(filePath); err != nil {
 			if persist.IsNotFound(err) {
 				logger.LogGRPC(fullMethod, codes.NotFound, time.Since(start), logger.SourceStub)
-				return codes.NotFound, true, nil
+				return codes.NotFound, true, nil, ""
 			}
 			logger.Error("grpc persist delete file", "file", filePath, "err", err)
 			logger.LogGRPC(fullMethod, codes.Internal, time.Since(start), logger.SourceStub)
-			return codes.Internal, true, nil
+			return codes.Internal, true, nil, ""
 		}
 		logger.LogGRPC(fullMethod, codes.OK, time.Since(start), logger.SourceStub)
-		return codes.OK, true, nil
+		return codes.OK, true, nil, filePath
 
 	default:
 		logger.Warn("grpc persist: unknown merge strategy", "merge", c.Merge)
 		logger.LogGRPC(fullMethod, codes.Internal, time.Since(start), logger.SourceStub)
-		return codes.Internal, true, nil
+		return codes.Internal, true, nil, ""
 	}
 }
 
