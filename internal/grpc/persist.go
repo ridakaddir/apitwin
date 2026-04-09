@@ -33,13 +33,10 @@ func (h *handler) applyGRPCPersist(
 	// When source is set, extract only that sub-field from the request body
 	// before any other processing. This lets callers persist a nested entity
 	// (e.g. "service") without polluting the stub with wrapper fields.
-	fmt.Printf("[DEBUG] c.Source=%q c.Wrap=%q c.Merge=%q c.Persist=%v\n", c.Source, c.Wrap, c.Merge, c.Persist)
 	srcMap := reqMap
 	if c.Source != "" {
-		logger.Info("grpc persist source", "source", c.Source, "reqKeys", mapKeys(reqMap))
-		if sub := extractSourceField(reqMap, c.Source); sub != nil {
+		if sub := persist.ExtractSourceField(reqMap, c.Source); sub != nil {
 			srcMap = sub
-			logger.Info("grpc persist source extracted", "keys", mapKeys(sub))
 		} else {
 			logger.Warn("grpc persist source: field not found", "source", c.Source)
 		}
@@ -255,39 +252,6 @@ func resolveGRPCFilePath(filePath string, reqMap map[string]interface{}, configD
 	return filePath
 }
 
-// mapKeys returns the top-level keys of a map (debug helper).
-func mapKeys(m map[string]interface{}) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
-// extractSourceField walks a dot-notation path through reqMap and returns the
-// sub-map at that path.  Returns nil if the path does not resolve to a map.
-func extractSourceField(reqMap map[string]interface{}, dotPath string) map[string]interface{} {
-	parts := strings.Split(dotPath, ".")
-	var current interface{} = reqMap
-	for _, part := range parts {
-		m, ok := current.(map[string]interface{})
-		if !ok {
-			return nil
-		}
-		v, exists := m[part]
-		if !exists {
-			v, exists = m[snakeToCamel(part)]
-			if !exists {
-				return nil
-			}
-		}
-		current = v
-	}
-	if sub, ok := current.(map[string]interface{}); ok {
-		return sub
-	}
-	return nil
-}
 
 // walkNestedField walks a dot-notation path through a map[string]interface{},
 // trying each segment as-is first then as camelCase.  Returns the string

@@ -58,14 +58,14 @@ func writeStub(t *testing.T, path string, data map[string]interface{}) {
 	}
 }
 
-// initialServiceStub returns the initial stub data shared across tests.
-func initialServiceStub() map[string]interface{} {
+// initialCityStub returns the initial stub data shared across tests.
+func initialCityStub() map[string]interface{} {
 	return map[string]interface{}{
-		"name":        "my-service",
-		"description": "Original description",
-		"cpu":         "500m",
-		"memory":      "256Mi",
-		"replicas":    float64(3),
+		"name":        "marrakech",
+		"description": "Red city of Morocco",
+		"elevation":   "466m",
+		"population":  float64(928850),
+		"area":        "230km2",
 	}
 }
 
@@ -75,32 +75,32 @@ func initialServiceStub() map[string]interface{} {
 
 func TestApplyGRPCPersist_SourceExtractsNestedField(t *testing.T) {
 	dir := t.TempDir()
-	stubFile := filepath.Join(dir, "stubs", "services", "my-service.json")
-	writeStub(t, stubFile, initialServiceStub())
+	stubFile := filepath.Join(dir, "stubs", "cities", "marrakech.json")
+	writeStub(t, stubFile, initialCityStub())
 
 	h := newTestHandler(t, dir)
 
 	c := config.Case{
 		Status:  0,
-		File:    "stubs/services/{body.service.name}.json",
+		File:    "stubs/cities/{body.city.name}.json",
 		Persist: true,
 		Merge:   "update",
-		Source:  "service",
-		Wrap:    "service",
+		Source:  "city",
+		Wrap:    "city",
 	}
 
 	reqMap := map[string]interface{}{
-		"orgId":         "org-123",
-		"providerId":    "GCP",
-		"environmentId": "env-dev",
-		"service": map[string]interface{}{
-			"name": "my-service",
-			"cpu":  "1000m",
+		"continentCode": "africa",
+		"regionId":      "north-africa",
+		"language":      "fr",
+		"city": map[string]interface{}{
+			"name":      "marrakech",
+			"elevation": "470m",
 		},
 	}
 
 	code, handled, result := h.applyGRPCPersist(c, reqMap, time.Now(),
-		"/service.v1.ServiceService/UpdateService", nil)
+		"/geo.CityService/UpdateCity", nil)
 
 	if !handled {
 		t.Fatal("expected handled=true")
@@ -109,44 +109,44 @@ func TestApplyGRPCPersist_SourceExtractsNestedField(t *testing.T) {
 		t.Fatalf("expected OK, got %v", code)
 	}
 
-	// Response should be wrapped: {"service": {...}}
-	inner, ok := result["service"].(map[string]interface{})
+	// Response should be wrapped: {"city": {...}}
+	inner, ok := result["city"].(map[string]interface{})
 	if !ok {
-		t.Fatalf("expected wrapped response with service key, got %v", result)
+		t.Fatalf("expected wrapped response with city key, got %v", result)
 	}
-	if inner["cpu"] != "1000m" {
-		t.Errorf("expected cpu=1000m in response, got %v", inner["cpu"])
+	if inner["elevation"] != "470m" {
+		t.Errorf("expected elevation=470m in response, got %v", inner["elevation"])
 	}
 
 	// Verify persisted file.
 	stub := readStub(t, stubFile)
 
-	// cpu changed from 500m to 1000m.
-	if stub["cpu"] != "1000m" {
-		t.Errorf("expected cpu=1000m, got %v", stub["cpu"])
+	// elevation changed from 466m to 470m.
+	if stub["elevation"] != "470m" {
+		t.Errorf("expected elevation=470m, got %v", stub["elevation"])
 	}
 
 	// Metadata fields must NOT be in the file.
-	for _, field := range []string{"orgId", "providerId", "environmentId", "org_id", "provider_id", "environment_id"} {
+	for _, field := range []string{"continentCode", "regionId", "language", "continent_code", "region_id"} {
 		if stub[field] != nil {
 			t.Errorf("%s should not be in stub, got %v", field, stub[field])
 		}
 	}
 
-	// No nested service key inside the file.
-	if stub["service"] != nil {
-		t.Error("service sub-object should not be in stub")
+	// No nested city key inside the file.
+	if stub["city"] != nil {
+		t.Error("city sub-object should not be in stub")
 	}
 
 	// Other fields unchanged.
-	if stub["description"] != "Original description" {
+	if stub["description"] != "Red city of Morocco" {
 		t.Errorf("description changed: %v", stub["description"])
 	}
-	if stub["memory"] != "256Mi" {
-		t.Errorf("memory changed: %v", stub["memory"])
+	if stub["area"] != "230km2" {
+		t.Errorf("area changed: %v", stub["area"])
 	}
-	if stub["replicas"] != float64(3) {
-		t.Errorf("replicas changed: %v", stub["replicas"])
+	if stub["population"] != float64(928850) {
+		t.Errorf("population changed: %v", stub["population"])
 	}
 }
 
@@ -156,34 +156,34 @@ func TestApplyGRPCPersist_SourceExtractsNestedField(t *testing.T) {
 
 func TestApplyGRPCPersist_SourceMultipleFieldsUpdated(t *testing.T) {
 	dir := t.TempDir()
-	stubFile := filepath.Join(dir, "stubs", "services", "my-service.json")
-	writeStub(t, stubFile, initialServiceStub())
+	stubFile := filepath.Join(dir, "stubs", "cities", "marrakech.json")
+	writeStub(t, stubFile, initialCityStub())
 
 	h := newTestHandler(t, dir)
 
 	c := config.Case{
 		Status:  0,
-		File:    "stubs/services/{body.service.name}.json",
+		File:    "stubs/cities/{body.city.name}.json",
 		Persist: true,
 		Merge:   "update",
-		Source:  "service",
-		Wrap:    "service",
+		Source:  "city",
+		Wrap:    "city",
 	}
 
 	reqMap := map[string]interface{}{
-		"orgId":         "org-123",
-		"providerId":    "GCP",
-		"environmentId": "env-dev",
-		"service": map[string]interface{}{
-			"name":        "my-service",
-			"cpu":         "2000m",
-			"memory":      "512Mi",
+		"continentCode": "africa",
+		"regionId":      "north-africa",
+		"language":      "ar",
+		"city": map[string]interface{}{
+			"name":        "marrakech",
+			"elevation":   "466m",
+			"population":  float64(1000000),
 			"description": "Updated description",
 		},
 	}
 
 	code, handled, _ := h.applyGRPCPersist(c, reqMap, time.Now(),
-		"/service.v1.ServiceService/UpdateService", nil)
+		"/geo.CityService/UpdateCity", nil)
 
 	if !handled || code != codes.OK {
 		t.Fatalf("expected handled=true, OK; got handled=%v, code=%v", handled, code)
@@ -192,23 +192,23 @@ func TestApplyGRPCPersist_SourceMultipleFieldsUpdated(t *testing.T) {
 	stub := readStub(t, stubFile)
 
 	// All three fields updated.
-	if stub["cpu"] != "2000m" {
-		t.Errorf("expected cpu=2000m, got %v", stub["cpu"])
+	if stub["elevation"] != "466m" {
+		t.Errorf("expected elevation=466m, got %v", stub["elevation"])
 	}
-	if stub["memory"] != "512Mi" {
-		t.Errorf("expected memory=512Mi, got %v", stub["memory"])
+	if stub["population"] != float64(1000000) {
+		t.Errorf("expected population=1000000, got %v", stub["population"])
 	}
 	if stub["description"] != "Updated description" {
 		t.Errorf("expected description=Updated description, got %v", stub["description"])
 	}
 
-	// replicas unchanged (not in request).
-	if stub["replicas"] != float64(3) {
-		t.Errorf("replicas should be unchanged, got %v", stub["replicas"])
+	// area unchanged (not in request).
+	if stub["area"] != "230km2" {
+		t.Errorf("area should be unchanged, got %v", stub["area"])
 	}
 
 	// No metadata fields leaked.
-	for _, field := range []string{"orgId", "providerId", "environmentId"} {
+	for _, field := range []string{"continentCode", "regionId", "language"} {
 		if stub[field] != nil {
 			t.Errorf("%s should not be in stub", field)
 		}
@@ -217,36 +217,40 @@ func TestApplyGRPCPersist_SourceMultipleFieldsUpdated(t *testing.T) {
 
 // -----------------------------------------------------------------------
 // Test 3: Without source — verifies old (broken) behavior
+//
+// This is an intentional regression test that asserts metadata DOES leak
+// when source is omitted. If automatic source detection or default
+// behavior changes in the future, this test will need updating.
 // -----------------------------------------------------------------------
 
 func TestApplyGRPCPersist_WithoutSourceLeaksMetadata(t *testing.T) {
 	dir := t.TempDir()
-	stubFile := filepath.Join(dir, "stubs", "services", "my-service.json")
-	writeStub(t, stubFile, initialServiceStub())
+	stubFile := filepath.Join(dir, "stubs", "cities", "marrakech.json")
+	writeStub(t, stubFile, initialCityStub())
 
 	h := newTestHandler(t, dir)
 
 	// Same config but WITHOUT source.
 	c := config.Case{
 		Status:  0,
-		File:    "stubs/services/{body.service.name}.json",
+		File:    "stubs/cities/{body.city.name}.json",
 		Persist: true,
 		Merge:   "update",
-		Wrap:    "service",
+		Wrap:    "city",
 	}
 
 	reqMap := map[string]interface{}{
-		"orgId":         "org-123",
-		"providerId":    "GCP",
-		"environmentId": "env-dev",
-		"service": map[string]interface{}{
-			"name": "my-service",
-			"cpu":  "1000m",
+		"continentCode": "africa",
+		"regionId":      "north-africa",
+		"language":      "fr",
+		"city": map[string]interface{}{
+			"name":      "marrakech",
+			"elevation": "470m",
 		},
 	}
 
 	code, handled, _ := h.applyGRPCPersist(c, reqMap, time.Now(),
-		"/service.v1.ServiceService/UpdateService", nil)
+		"/geo.CityService/UpdateCityRaw", nil)
 
 	if !handled || code != codes.OK {
 		t.Fatalf("expected handled=true, OK; got handled=%v, code=%v", handled, code)
@@ -255,25 +259,25 @@ func TestApplyGRPCPersist_WithoutSourceLeaksMetadata(t *testing.T) {
 	stub := readStub(t, stubFile)
 
 	// Without source, metadata fields leak into the file.
-	if stub["orgId"] == nil {
-		t.Error("without source, orgId should leak into stub (broken behavior)")
+	if stub["continentCode"] == nil {
+		t.Error("without source, continentCode should leak into stub (broken behavior)")
 	}
-	if stub["providerId"] == nil {
-		t.Error("without source, providerId should leak into stub (broken behavior)")
+	if stub["regionId"] == nil {
+		t.Error("without source, regionId should leak into stub (broken behavior)")
 	}
-	if stub["environmentId"] == nil {
-		t.Error("without source, environmentId should leak into stub (broken behavior)")
-	}
-
-	// The nested service object is added as-is.
-	if stub["service"] == nil {
-		t.Error("without source, service sub-object should be in stub (broken behavior)")
+	if stub["language"] == nil {
+		t.Error("without source, language should leak into stub (broken behavior)")
 	}
 
-	// Original cpu is NOT updated (still 500m) because the top-level merge
-	// doesn't reach into the nested service object.
-	if stub["cpu"] != "500m" {
-		t.Errorf("without source, cpu should remain 500m, got %v", stub["cpu"])
+	// The nested city object is added as-is.
+	if stub["city"] == nil {
+		t.Error("without source, city sub-object should be in stub (broken behavior)")
+	}
+
+	// Original elevation is NOT updated (still 466m) because the top-level merge
+	// doesn't reach into the nested city object.
+	if stub["elevation"] != "466m" {
+		t.Errorf("without source, elevation should remain 466m, got %v", stub["elevation"])
 	}
 }
 
@@ -283,53 +287,53 @@ func TestApplyGRPCPersist_WithoutSourceLeaksMetadata(t *testing.T) {
 
 func TestApplyGRPCPersist_SourceDeepNestedPath(t *testing.T) {
 	dir := t.TempDir()
-	stubFile := filepath.Join(dir, "stubs", "endpoints", "ep-42.json")
+	stubFile := filepath.Join(dir, "stubs", "summits", "toubkal.json")
 	writeStub(t, stubFile, map[string]interface{}{
-		"id":          "ep-42",
-		"name":        "my-endpoint",
-		"description": "Original",
+		"id":       "toubkal",
+		"name":     "Jbel Toubkal",
+		"altitude": "4167m",
 	})
 
 	h := newTestHandler(t, dir)
 
 	c := config.Case{
 		Status:  0,
-		File:    "stubs/endpoints/{body.config.endpoint.id}.json",
+		File:    "stubs/summits/{body.terrain.summit.id}.json",
 		Persist: true,
 		Merge:   "update",
-		Source:  "config.endpoint",
+		Source:  "terrain.summit",
 	}
 
 	reqMap := map[string]interface{}{
 		"metadata": "should-not-leak",
-		"config": map[string]interface{}{
+		"terrain": map[string]interface{}{
 			"version": "v2",
-			"endpoint": map[string]interface{}{
-				"id":          "ep-42",
-				"description": "Updated",
+			"summit": map[string]interface{}{
+				"id":       "toubkal",
+				"altitude": "4168m",
 			},
 		},
 	}
 
 	code, handled, result := h.applyGRPCPersist(c, reqMap, time.Now(),
-		"/config.v1.ConfigService/UpdateEndpoint", nil)
+		"/geo.TerrainService/UpdateSummit", nil)
 
 	if !handled || code != codes.OK {
 		t.Fatalf("expected handled=true, OK; got handled=%v, code=%v", handled, code)
 	}
 
 	// Response should contain the merged result (no wrap configured).
-	if result["description"] != "Updated" {
-		t.Errorf("expected description=Updated in response, got %v", result["description"])
+	if result["altitude"] != "4168m" {
+		t.Errorf("expected altitude=4168m in response, got %v", result["altitude"])
 	}
 
 	stub := readStub(t, stubFile)
 
-	// Deep source extracted body.config.endpoint.
-	if stub["description"] != "Updated" {
-		t.Errorf("expected description=Updated, got %v", stub["description"])
+	// Deep source extracted body.terrain.summit.
+	if stub["altitude"] != "4168m" {
+		t.Errorf("expected altitude=4168m, got %v", stub["altitude"])
 	}
-	if stub["name"] != "my-endpoint" {
+	if stub["name"] != "Jbel Toubkal" {
 		t.Errorf("name should be unchanged, got %v", stub["name"])
 	}
 
@@ -337,8 +341,8 @@ func TestApplyGRPCPersist_SourceDeepNestedPath(t *testing.T) {
 	if stub["metadata"] != nil {
 		t.Error("metadata should not be in stub")
 	}
-	if stub["config"] != nil {
-		t.Error("config should not be in stub")
+	if stub["terrain"] != nil {
+		t.Error("terrain should not be in stub")
 	}
 	if stub["version"] != nil {
 		t.Error("version should not be in stub")

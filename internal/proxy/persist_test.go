@@ -231,42 +231,6 @@ func TestAppendKeyResolutionFromWildcard(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------
-// extractSourceField
-// -----------------------------------------------------------------------
-
-func TestExtractSourceField_TopLevel(t *testing.T) {
-	data := map[string]interface{}{
-		"continent": "Europe",
-		"country":   map[string]interface{}{"name": "France", "code": "FR"},
-	}
-	got := extractSourceField(data, "country")
-	require.NotNil(t, got)
-	assert.Equal(t, "France", got["name"])
-	assert.Nil(t, got["continent"], "parent field should not be in extracted sub-map")
-}
-
-func TestExtractSourceField_Nested(t *testing.T) {
-	data := map[string]interface{}{
-		"continent": map[string]interface{}{
-			"country": map[string]interface{}{"name": "France"},
-		},
-	}
-	got := extractSourceField(data, "continent.country")
-	require.NotNil(t, got)
-	assert.Equal(t, "France", got["name"])
-}
-
-func TestExtractSourceField_NotFound(t *testing.T) {
-	data := map[string]interface{}{"name": "France"}
-	assert.Nil(t, extractSourceField(data, "missing"))
-}
-
-func TestExtractSourceField_ScalarIsNil(t *testing.T) {
-	data := map[string]interface{}{"name": "France"}
-	assert.Nil(t, extractSourceField(data, "name"))
-}
-
-// -----------------------------------------------------------------------
 // applyPersist with source
 // -----------------------------------------------------------------------
 
