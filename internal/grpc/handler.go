@@ -359,44 +359,7 @@ func extractGRPCBodyField(dotPath string, body []byte) (string, bool) {
 	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&data); err != nil {
 		return "", false
 	}
-	parts := strings.Split(dotPath, ".")
-	var current interface{} = data
-	for _, part := range parts {
-		m, ok := current.(map[string]interface{})
-		if !ok {
-			return "", false
-		}
-		// Try the field name as-is first, then camelCase conversion.
-		v, exists := m[part]
-		if !exists {
-			v, exists = m[snakeToCamel(part)]
-			if !exists {
-				return "", false
-			}
-		}
-		current = v
-	}
-	switch v := current.(type) {
-	case string:
-		return v, true
-	case float64:
-		s := strings.TrimRight(strings.TrimRight(
-			strings.TrimRight(fmt.Sprintf("%f", v), "0"), "."), "")
-		return s, true
-	case bool:
-		if v {
-			return "true", true
-		}
-		return "false", true
-	case nil:
-		return "", false
-	default:
-		b, err := json.Marshal(v)
-		if err != nil {
-			return "", false
-		}
-		return string(b), true
-	}
+	return walkNestedField(data, dotPath)
 }
 
 // mapToJSONBytes serialises a map to JSON bytes for condition evaluation.

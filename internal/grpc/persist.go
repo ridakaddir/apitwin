@@ -273,6 +273,10 @@ func walkNestedField(reqMap map[string]interface{}, dotPath string) (string, boo
 	case nil:
 		return "", false
 	default:
-		return fmt.Sprintf("%v", v), true
+		b, err := json.Marshal(v)
+		if err != nil {
+			return "", false
+		}
+		return string(b), true
 	}
 }
