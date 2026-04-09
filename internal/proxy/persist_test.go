@@ -229,3 +229,39 @@ func TestAppendKeyResolutionFromWildcard(t *testing.T) {
 	assert.Equal(t, "tenant-abc", content["tenantId"])
 	assert.Equal(t, "create", content["action"])
 }
+
+// -----------------------------------------------------------------------
+// applyPersist with source
+// -----------------------------------------------------------------------
+
+func TestUpdateWithSource(t *testing.T) {
+	dir := t.TempDir()
+	stubFile := filepath.Join(dir, "france.json")
+	require.NoError(t, os.WriteFile(stubFile, []byte(`{"name":"France","code":"FR","continent":"Europe"}`), 0644))
+
+	c := config.Case{
+		Status:  200,
+		File:    stubFile,
+		Persist: true,
+		Merge:   "update",
+		Source:  "country",
+	}
+
+	body := []byte(`{"continent":"Europe","region":"Western","country":{"name":"France","code":"FRA"}}`)
+	req := httptest.NewRequest(http.MethodPut, "/countries/FR", nil)
+	w := httptest.NewRecorder()
+
+	handled, _ := applyPersist(w, req, c, body, "/countries/*", "", map[string]string{})
+	require.True(t, handled)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	result := readJSONFile(t, stubFile)
+	// source extracted only "country" sub-field, so continent/region should NOT leak.
+	assert.Nil(t, result["continent_root"], "top-level continent should not leak into stub")
+	assert.Nil(t, result["region"], "region should not leak into stub")
+	// Merged data from country sub-field.
+	assert.Equal(t, "France", result["name"])
+	assert.Equal(t, "FRA", result["code"])
+	// Original field preserved.
+	assert.Equal(t, "Europe", result["continent"])
+}

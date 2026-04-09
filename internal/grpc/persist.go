@@ -30,11 +30,23 @@ func (h *handler) applyGRPCPersist(
 	configDir := h.loader.ConfigDir()
 	filePath := resolveGRPCFilePath(c.File, reqMap, configDir)
 
+	// When source is set, extract only that sub-field from the request body
+	// before any other processing. This lets callers persist a nested entity
+	// (e.g. "service") without polluting the stub with wrapper fields.
+	srcMap := reqMap
+	if c.Source != "" {
+		if sub := persist.ExtractSourceField(reqMap, c.Source); sub != nil {
+			srcMap = sub
+		} else {
+			logger.Warn("grpc persist source: field not found", "source", c.Source)
+		}
+	}
+
 	// Strip fields used as {body.*} path placeholders so they don't leak
 	// into the persisted stub (they are routing fields, not data fields).
 	// persistData is what gets stored; reqMap (unfiltered) is still passed to
 	// loadGRPCDefaults for template lookups since defaults may reference routing fields.
-	persistData := stripPathPlaceholderFields(c.File, reqMap)
+	persistData := stripPathPlaceholderFields(c.File, srcMap)
 
 	// When wrap is set, filter persistData to only fields valid in the entity
 	// message. This prevents routing fields from the request (e.g. orgId,
@@ -239,6 +251,7 @@ func resolveGRPCFilePath(filePath string, reqMap map[string]interface{}, configD
 	}
 	return filePath
 }
+
 
 // walkNestedField walks a dot-notation path through a map[string]interface{},
 // trying each segment as-is first then as camelCase.  Returns the string

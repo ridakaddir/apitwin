@@ -18,6 +18,7 @@ Cases are named response definitions attached to a route. Each route can have mu
 | `merge` | string | — | `update`, `append`, or `delete` (requires `persist: true`) |
 | `key` | string | — | Field name for filename when using `append` with directories (resolved from body, path params, or query — see [directory stubs](../features/directory-stubs.md#key-resolution-for-filenames)) |
 | `defaults` | string | — | JSON file with default values for `append`/`update` operations |
+| `source` | string | — | Dot-path into the request body; only that sub-object is persisted (e.g. `"city"` or `"config.endpoint"`) |
 | `wrap` | string | — | Wrap response into `{"field": <content>}` — works with both directories and single files; for gRPC directories, auto-detected from proto if omitted |
 
 ---
@@ -137,6 +138,29 @@ merge   = "delete"
 ```
 
 See [Directory-Based Stubs](../features/directory-stubs.md) for the full persistence guide.
+
+### Source extraction
+
+When the request wraps the entity inside a nested field (common in gRPC), use `source` to extract only that sub-object before merging. Without it, routing and metadata fields leak into the stub file.
+
+```toml
+# Request body: {"continentCode":"africa", "regionId":"north-africa", "city":{"name":"marrakech","elevation":"470m"}}
+# Only the city sub-object is persisted — continentCode and regionId are excluded.
+[grpc_routes.cases.updated]
+file    = "stubs/cities/{body.city.name}.json"
+persist = true
+merge   = "update"
+source  = "city"
+wrap    = "city"
+```
+
+`source` accepts a dot-path for deeply nested objects:
+
+```toml
+source = "terrain.summit"    # extracts body.terrain.summit
+```
+
+See [`examples/grpc-source-persist/`](../../examples/grpc-source-persist/) for a complete working example.
 
 ### Defaults
 

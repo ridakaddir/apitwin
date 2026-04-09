@@ -73,6 +73,11 @@ examples/
 │   ├── apitwin.toml
 │   └── stubs/
 │
+├── grpc-source-persist/      # gRPC — source extraction for persist (nested field merge)
+│   ├── geography.proto
+│   ├── apitwin.toml
+│   └── stubs/
+│
 ├── grpc-wrap/                # gRPC — response wrapping (single file + directory)
 │   ├── countries.proto
 │   ├── apitwin.toml
@@ -568,6 +573,72 @@ grpcurl -plaintext \
 Reset: `git checkout examples/grpc-directory-persist/stubs/items/`
 
 **Features:** Each item is one file, protobuf field mapping (`item_id` ↔ `itemId`), unlimited scalability.
+
+---
+
+## grpc-source-persist
+
+Source extraction for gRPC persist operations. When a request wraps the entity inside a nested field (e.g. `UpdateCityRequest.city`), the `source` field extracts only the nested sub-object before merging — preventing metadata and routing fields from leaking into the stub file.
+
+```sh
+apitwin --config examples/grpc-source-persist \
+      --grpc-proto examples/grpc-source-persist/geography.proto
+```
+
+**Test 1 — source extracts nested city before merge:**
+
+```sh
+grpcurl -plaintext -d '{
+  "continentCode": "africa",
+  "regionId": "north-africa",
+  "language": "fr",
+  "city": { "name": "marrakech", "elevation": "470m" }
+}' localhost:50051 geo.CityService/UpdateCity
+
+# Response: {"city": {"name":"marrakech","description":"Red city of Morocco","elevation":"470m","population":928850,"area":"230km2"}}
+# Stub updated: only elevation changed. No continentCode/regionId/language leaked.
+```
+
+**Test 2 — multiple fields updated at once:**
+
+```sh
+grpcurl -plaintext -d '{
+  "continentCode": "africa",
+  "regionId": "north-africa",
+  "language": "ar",
+  "city": { "name": "marrakech", "elevation": "466m", "population": 1000000, "description": "Updated description" }
+}' localhost:50051 geo.CityService/UpdateCity
+
+# population, description updated; area unchanged; no metadata leaked.
+```
+
+**Test 3 — without source (demonstrates broken behavior):**
+
+```sh
+grpcurl -plaintext -d '{
+  "continentCode": "africa",
+  "regionId": "north-africa",
+  "language": "fr",
+  "city": { "name": "marrakech", "elevation": "470m" }
+}' localhost:50051 geo.CityService/UpdateCityRaw
+
+# continentCode, regionId, language leak into stub; nested city object added; original elevation NOT updated.
+```
+
+**Test 4 — deep nested source path (`source = "terrain.summit"`):**
+
+```sh
+grpcurl -plaintext -d '{
+  "metadata": "should-not-leak",
+  "terrain": { "version": "v2", "summit": { "id": "toubkal", "altitude": "4168m" } }
+}' localhost:50051 geo.TerrainService/UpdateSummit
+
+# Only altitude updated in stub. No metadata/version/terrain fields leaked.
+```
+
+Reset: `git checkout examples/grpc-source-persist/stubs/`
+
+**Key concept:** The `source` field accepts a dot-path (e.g. `"city"`, `"terrain.summit"`) that selects which nested sub-object from the request body is used for persistence. Without it, the entire request body — including routing metadata — is merged into the stub.
 
 ---
 

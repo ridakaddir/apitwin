@@ -77,6 +77,7 @@ type Case struct {
 	ArrayKey string `json:"array_key" yaml:"array_key" toml:"array_key"` // array field in stub JSON
 	Defaults string `json:"defaults"  yaml:"defaults"  toml:"defaults"`  // JSON file with default values for append/update
 	Wrap     string `json:"wrap"      yaml:"wrap"      toml:"wrap"`      // wrap response into {"field": <content>}
+	Source   string `json:"source"    yaml:"source"    toml:"source"`    // dot-path into request body; only that sub-object is persisted
 
 	// Cascade mutation fields
 	Primary *CascadePrimary `json:"primary,omitempty"  yaml:"primary,omitempty"  toml:"primary,omitempty"`

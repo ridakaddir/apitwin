@@ -1,0 +1,77 @@
+# gRPC Source Persist Example
+#
+# Demonstrates the `source` field on persist cases. When set, only the nested
+# sub-object at that dot-path is extracted from the request body before merging.
+# Without it, routing/metadata fields leak into the stub file.
+#
+# Run:
+#   apitwin --config examples/grpc-source-persist \
+#         --grpc-proto examples/grpc-source-persist/geography.proto
+#
+# Reset stubs after testing:
+#   git checkout examples/grpc-source-persist/stubs/
+
+# ─── Test 1 & 2: source extracts nested city before merge ─────────────────
+#
+#   grpcurl -plaintext -d '{
+#     "continentCode": "africa",
+#     "regionId": "north-africa",
+#     "language": "fr",
+#     "city": { "name": "marrakech", "elevation": "470m" }
+#   }' localhost:50051 geo.CityService/UpdateCity
+#
+# Expected: only city fields merged; continentCode/regionId/language excluded.
+
+[[grpc_routes]]
+match    = "/geo.CityService/UpdateCity"
+fallback = "updated"
+
+  [grpc_routes.cases.updated]
+  status  = 0
+  file    = "stubs/cities/{body.city.name}.json"
+  persist = true
+  merge   = "update"
+  source  = "city"
+  wrap    = "city"
+
+# ─── Test 3: without source — metadata leaks (broken behavior) ────────────
+#
+#   grpcurl -plaintext -d '{
+#     "continentCode": "africa",
+#     "regionId": "north-africa",
+#     "language": "fr",
+#     "city": { "name": "marrakech", "elevation": "470m" }
+#   }' localhost:50051 geo.CityService/UpdateCityRaw
+#
+# Expected: continentCode, regionId, language leak into stub; nested city
+# object added; original elevation NOT updated (confirms broken behavior).
+
+[[grpc_routes]]
+match    = "/geo.CityService/UpdateCityRaw"
+fallback = "updated_raw"
+
+  [grpc_routes.cases.updated_raw]
+  status  = 0
+  file    = "stubs/cities/{body.city.name}.json"
+  persist = true
+  merge   = "update"
+  wrap    = "city"
+
+# ─── Test 4: deep nested source path ──────────────────────────────────────
+#
+#   grpcurl -plaintext -d '{
+#     "metadata": "should-not-leak",
+#     "terrain": { "version": "v2", "summit": { "id": "toubkal", "altitude": "4168m" } }
+#   }' localhost:50051 geo.TerrainService/UpdateSummit
+#
+# Expected: only altitude updated; metadata/version/terrain excluded.
+
+[[grpc_routes]]
+match    = "/geo.TerrainService/UpdateSummit"
+fallback = "updated"
+
+  [grpc_routes.cases.updated]
+  file    = "stubs/summits/{body.terrain.summit.id}.json"
+  persist = true
+  merge   = "update"
+  source  = "terrain.summit"

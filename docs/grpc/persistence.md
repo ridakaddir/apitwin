@@ -90,6 +90,31 @@ Persist operations return the updated or created data in the response. For `upda
 
 ---
 
+## Source extraction
+
+When a gRPC request wraps the entity inside a nested field (e.g. `UpdateCityRequest` has top-level routing fields plus a nested `City city`), use `source` to extract only the sub-object before merging. Without it, all top-level fields — including routing metadata — leak into the stub file.
+
+```toml
+[grpc_routes.cases.updated]
+file    = "stubs/cities/{body.city.name}.json"
+persist = true
+merge   = "update"
+source  = "city"           # only body.city is persisted
+wrap    = "city"           # response: {"city": {...}}
+```
+
+`source` accepts a dot-path for deeply nested objects:
+
+```toml
+source = "terrain.summit"   # extracts body.terrain.summit
+```
+
+**Without source**, the entire request body is merged into the stub — routing fields like `continentCode`, `regionId` leak in, and the nested object is added as-is rather than being unwrapped for the merge.
+
+See [`examples/grpc-source-persist/`](../../examples/grpc-source-persist/) for a complete working example with four test scenarios.
+
+---
+
 ## Response wrapping
 
 Use the `wrap` field to match the proto response message shape. The file on disk stays flat, but the response is wrapped:
@@ -108,6 +133,7 @@ See [Configuration — Response wrapping](config.md#single-file-wrapping) for de
 
 See [`examples/grpc-directory-persist/`](../../examples/grpc-directory-persist/) for a complete working example.
 See [`examples/grpc-wrap/`](../../examples/grpc-wrap/) for an example with response wrapping.
+See [`examples/grpc-source-persist/`](../../examples/grpc-source-persist/) for an example with source extraction.
 
 ---
 
