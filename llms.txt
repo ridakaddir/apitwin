@@ -233,6 +233,7 @@ routes:
 | `key` | string | | Field name used as filename for persist operations |
 | `array_key` | string | | Array field name in stub JSON (for legacy single-file persistence) |
 | `defaults` | string | | Path to defaults JSON file, deep-merged under request body |
+| `source` | string | | Dot-path into request body; only that sub-object is persisted (e.g. `"city"` or `"config.endpoint"`) — prevents routing/metadata fields from leaking into stubs |
 | `wrap` | string | | Wrap response into `{"field": <content>}` — works with directories and single files, for both HTTP and gRPC; auto-detected from proto for gRPC directories if omitted |
 
 **Rules:**
@@ -1245,6 +1246,21 @@ Only `source = "body"` is supported for gRPC (not `query` or `header`). Dot-nota
 
 ### gRPC proxy fallthrough
 If a route has no `fallback` and no matching condition, the request is forwarded to `--grpc-target`. If no target is set, returns `UNIMPLEMENTED`.
+
+### gRPC source extraction for persist
+
+When a gRPC request wraps the entity inside a nested field (e.g. `UpdateCityRequest` has routing fields + nested `City city`), use `source` to extract only the sub-object before merging. Without it, routing/metadata fields leak into the stub.
+
+```toml
+[grpc_routes.cases.updated]
+file    = "stubs/cities/{body.city.name}.json"
+persist = true
+merge   = "update"
+source  = "city"              # only body.city is persisted
+wrap    = "city"              # response: {"city": {...}}
+```
+
+Dot-paths work for deep nesting: `source = "terrain.summit"` extracts `body.terrain.summit`.
 
 ### gRPC persistence
 Same directory-based CRUD as HTTP. Full example:

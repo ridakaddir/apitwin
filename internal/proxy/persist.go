@@ -29,6 +29,15 @@ func applyPersist(w http.ResponseWriter, r *http.Request, c config.Case, bodyByt
 	// Parse request body for incoming record.
 	incoming := parseJSONBody(bodyBytes)
 
+	// When source is set, extract only that sub-field from the request body
+	// before any other processing. This lets callers persist a nested entity
+	// (e.g. "service") without polluting the stub with wrapper fields.
+	if c.Source != "" {
+		if sub := extractSourceField(incoming, c.Source); sub != nil {
+			incoming = sub
+		}
+	}
+
 	switch strings.ToLower(c.Merge) {
 	case "cascade":
 		// Handle cascade mutations with atomic semantics
@@ -303,6 +312,28 @@ func isDirectoryPath(resolvedPath, originalConfigFile string) bool {
 		return true
 	}
 	return false
+}
+
+// extractSourceField walks a dot-notation path through data and returns the
+// sub-map at that path.  Returns nil if the path does not resolve to a map.
+func extractSourceField(data map[string]interface{}, dotPath string) map[string]interface{} {
+	parts := strings.Split(dotPath, ".")
+	var current interface{} = data
+	for _, part := range parts {
+		m, ok := current.(map[string]interface{})
+		if !ok {
+			return nil
+		}
+		v, exists := m[part]
+		if !exists {
+			return nil
+		}
+		current = v
+	}
+	if sub, ok := current.(map[string]interface{}); ok {
+		return sub
+	}
+	return nil
 }
 
 // extractQueryParams extracts query parameters from the request.

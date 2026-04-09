@@ -43,6 +43,7 @@ apitwin --config examples/<name> --grpc-proto examples/<name>/<file>.proto
 | [`examples/grpc-conditions`](../examples/grpc-conditions) | gRPC condition routing on request body fields |
 | [`examples/grpc-proxy`](../examples/grpc-proxy) | gRPC selective mock + transparent upstream proxy fallthrough |
 | [`examples/grpc-directory-persist`](../examples/grpc-directory-persist) | gRPC directory-based CRUD — same as directory-stubs but for gRPC |
+| [`examples/grpc-source-persist`](../examples/grpc-source-persist) | gRPC source extraction — persist only a nested sub-object, not the full request |
 
 ## Standalone example files
 

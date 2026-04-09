@@ -1,0 +1,55 @@
+syntax = "proto3";
+package geo;
+option go_package = "github.com/example/geo";
+
+// ─── CityService (Tests 1–3) ────────────────────────────────────────────────
+
+service CityService {
+  rpc UpdateCity    (UpdateCityRequest) returns (UpdateCityResponse);
+  rpc UpdateCityRaw (UpdateCityRequest) returns (UpdateCityResponse);
+}
+
+message City {
+  string name        = 1;
+  string description = 2;
+  string elevation   = 3;
+  int32  population  = 4;
+  string area        = 5;
+}
+
+message UpdateCityRequest {
+  string continent_code = 1;
+  string region_id      = 2;
+  string language       = 3;
+  City   city           = 4;
+}
+
+message UpdateCityResponse {
+  City city = 1;
+}
+
+// ─── TerrainService (Test 4 — deep nested source) ───────────────────────────
+
+service TerrainService {
+  rpc UpdateSummit (UpdateSummitRequest) returns (UpdateSummitResponse);
+}
+
+message Summit {
+  string id       = 1;
+  string name     = 2;
+  string altitude = 3;
+}
+
+message TerrainConfig {
+  string version = 1;
+  Summit summit  = 2;
+}
+
+message UpdateSummitRequest {
+  string        metadata = 1;
+  TerrainConfig terrain  = 2;
+}
+
+message UpdateSummitResponse {
+  Summit summit = 1;
+}

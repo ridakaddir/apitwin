@@ -30,11 +30,26 @@ func (h *handler) applyGRPCPersist(
 	configDir := h.loader.ConfigDir()
 	filePath := resolveGRPCFilePath(c.File, reqMap, configDir)
 
+	// When source is set, extract only that sub-field from the request body
+	// before any other processing. This lets callers persist a nested entity
+	// (e.g. "service") without polluting the stub with wrapper fields.
+	fmt.Printf("[DEBUG] c.Source=%q c.Wrap=%q c.Merge=%q c.Persist=%v\n", c.Source, c.Wrap, c.Merge, c.Persist)
+	srcMap := reqMap
+	if c.Source != "" {
+		logger.Info("grpc persist source", "source", c.Source, "reqKeys", mapKeys(reqMap))
+		if sub := extractSourceField(reqMap, c.Source); sub != nil {
+			srcMap = sub
+			logger.Info("grpc persist source extracted", "keys", mapKeys(sub))
+		} else {
+			logger.Warn("grpc persist source: field not found", "source", c.Source)
+		}
+	}
+
 	// Strip fields used as {body.*} path placeholders so they don't leak
 	// into the persisted stub (they are routing fields, not data fields).
 	// persistData is what gets stored; reqMap (unfiltered) is still passed to
 	// loadGRPCDefaults for template lookups since defaults may reference routing fields.
-	persistData := stripPathPlaceholderFields(c.File, reqMap)
+	persistData := stripPathPlaceholderFields(c.File, srcMap)
 
 	// When wrap is set, filter persistData to only fields valid in the entity
 	// message. This prevents routing fields from the request (e.g. orgId,
@@ -238,6 +253,40 @@ func resolveGRPCFilePath(filePath string, reqMap map[string]interface{}, configD
 		filePath = filepath.Join(configDir, filePath)
 	}
 	return filePath
+}
+
+// mapKeys returns the top-level keys of a map (debug helper).
+func mapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// extractSourceField walks a dot-notation path through reqMap and returns the
+// sub-map at that path.  Returns nil if the path does not resolve to a map.
+func extractSourceField(reqMap map[string]interface{}, dotPath string) map[string]interface{} {
+	parts := strings.Split(dotPath, ".")
+	var current interface{} = reqMap
+	for _, part := range parts {
+		m, ok := current.(map[string]interface{})
+		if !ok {
+			return nil
+		}
+		v, exists := m[part]
+		if !exists {
+			v, exists = m[snakeToCamel(part)]
+			if !exists {
+				return nil
+			}
+		}
+		current = v
+	}
+	if sub, ok := current.(map[string]interface{}); ok {
+		return sub
+	}
+	return nil
 }
 
 // walkNestedField walks a dot-notation path through a map[string]interface{},
