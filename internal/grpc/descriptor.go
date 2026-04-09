@@ -156,6 +156,35 @@ func (r *Registry) FindRepeatedField(md *desc.MethodDescriptor) string {
 	return candidate
 }
 
+// EntityFieldNames returns the set of JSON and proto field names defined on the
+// entity message identified by the wrap field of the response type. This is used
+// to filter persist data so that only fields belonging to the entity message are
+// written to disk (preventing routing fields from leaking into stubs).
+// Returns nil if wrap is empty, not found, or does not point to a message type.
+func (r *Registry) EntityFieldNames(md *desc.MethodDescriptor, wrap string) map[string]bool {
+	if wrap == "" || md == nil {
+		return nil
+	}
+	outType := md.GetOutputType()
+	var entityDesc *desc.MessageDescriptor
+	for _, f := range outType.GetFields() {
+		if f.GetJSONName() == wrap || f.GetName() == wrap {
+			entityDesc = f.GetMessageType()
+			break
+		}
+	}
+	if entityDesc == nil {
+		return nil
+	}
+	fields := entityDesc.GetFields()
+	allowed := make(map[string]bool, len(fields)*2)
+	for _, f := range fields {
+		allowed[f.GetJSONName()] = true
+		allowed[f.GetName()] = true
+	}
+	return allowed
+}
+
 // EncodeResponse takes a JSON blob (protojson-compatible) and serialises it
 // into wire bytes for the given method's output type.
 func (r *Registry) EncodeResponse(md *desc.MethodDescriptor, jsonBytes []byte) ([]byte, error) {

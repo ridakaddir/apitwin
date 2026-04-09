@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jhump/protoreflect/desc" //nolint:staticcheck
 	"github.com/ridakaddir/apitwin/internal/config"
 	"github.com/ridakaddir/apitwin/internal/logger"
 	"github.com/ridakaddir/apitwin/internal/persist"
@@ -24,6 +25,7 @@ func (h *handler) applyGRPCPersist(
 	reqMap map[string]interface{},
 	start time.Time,
 	fullMethod string,
+	md *desc.MethodDescriptor,
 ) (code codes.Code, handled bool, result map[string]interface{}) {
 	configDir := h.loader.ConfigDir()
 	filePath := resolveGRPCFilePath(c.File, reqMap, configDir)
@@ -33,6 +35,16 @@ func (h *handler) applyGRPCPersist(
 	// persistData is what gets stored; reqMap (unfiltered) is still passed to
 	// loadGRPCDefaults for template lookups since defaults may reference routing fields.
 	persistData := stripPathPlaceholderFields(c.File, reqMap)
+
+	// When wrap is set, filter persistData to only fields valid in the entity
+	// message. This prevents routing fields from the request (e.g. orgId,
+	// providerId) from leaking into the persisted stub and causing proto
+	// encoding failures on the response.
+	if c.Wrap != "" && md != nil {
+		if allowed := h.registry.EntityFieldNames(md, c.Wrap); allowed != nil {
+			persistData = filterToEntityFields(persistData, allowed)
+		}
+	}
 
 	switch strings.ToLower(c.Merge) {
 
@@ -98,6 +110,21 @@ func (h *handler) applyGRPCPersist(
 		logger.LogGRPC(fullMethod, codes.Internal, time.Since(start), logger.SourceStub)
 		return codes.Internal, true, nil
 	}
+}
+
+// filterToEntityFields returns a shallow copy of data containing only keys
+// present in the allowed set. Returns data unchanged if allowed is nil.
+func filterToEntityFields(data map[string]interface{}, allowed map[string]bool) map[string]interface{} {
+	if allowed == nil {
+		return data
+	}
+	filtered := make(map[string]interface{}, len(allowed))
+	for k, v := range data {
+		if allowed[k] {
+			filtered[k] = v
+		}
+	}
+	return filtered
 }
 
 // stripPathPlaceholderFields returns a shallow copy of reqMap with fields used as
