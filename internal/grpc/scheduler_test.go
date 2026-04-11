@@ -115,14 +115,14 @@ func TestGRPCScheduler_StopCancelsPending(t *testing.T) {
 // that then stomped the recreated file with "ready" defaults before its own
 // transition window had elapsed.
 //
-// Timeline:
-//   t=0.0s   Schedule(stubFile, delay=2s)             -> G1 pending
-//   t=0.5s   file deleted (simulated)
-//   t=0.55s  stubFile re-created, Schedule called again -> G2 pending
-//   t=2.0s   G1 fires on the RE-CREATED file (bug)    -> status=Ready too early
+// Timeline (transition duration = 2s so each margin is ≥500ms for CI stability):
+//   t=0.0s   Schedule(stubFile, delay=2s)             -> G1 fires at t=2.0s
+//   t=0.5s   delete+recreate stubFile, Schedule again -> G2 fires at t=2.5s
+//   t=2.25s  assert status still "Queued" (G1 must be cancelled, G2 not yet fired)
+//   t=3.0s   assert status "Ready" (G2 has fired)
 //
 // After the fix, Schedule with the same filePath must cancel any in-flight
-// goroutine for that path so only G2 fires (at t=2.55s).
+// goroutine for that path so only G2 fires.
 func TestGRPCScheduler_RescheduleSameFileCancelsStale(t *testing.T) {
 	dir := t.TempDir()
 
@@ -136,7 +136,7 @@ func TestGRPCScheduler_RescheduleSameFileCancelsStale(t *testing.T) {
 		Match:    "/geography.GeographyService/CreateCountry",
 		Fallback: "created",
 		Transitions: []config.Transition{
-			{Case: "provisioning", Duration: 1}, // short for fast test
+			{Case: "provisioning", Duration: 2},
 			{Case: "ready"},
 		},
 		Cases: map[string]config.Case{
@@ -148,38 +148,49 @@ func TestGRPCScheduler_RescheduleSameFileCancelsStale(t *testing.T) {
 	sched := newGRPCTransitionScheduler(context.Background())
 	defer sched.Stop()
 
-	// t=0: first Schedule — G1 will try to fire at t=1s.
+	start := time.Now()
+
+	// t=0: first Schedule — G1 will try to fire at t=2.0s.
 	sched.Schedule(route, stubFile, dir)
 
-	// t=0.3s: delete and recreate the file (simulating a delete+recreate
+	// t=0.5s: delete and recreate the file (simulating a delete+recreate
 	// that happens entirely BEFORE G1's delay elapses).
-	time.Sleep(300 * time.Millisecond)
+	sleepUntil(start, 500*time.Millisecond)
 	if err := os.Remove(stubFile); err != nil {
 		t.Fatalf("remove stubFile: %v", err)
 	}
 	writeTestFile(t, stubFile, []byte(`{"code": "FR", "status": "Queued"}`))
 
-	// t=0.35s: second Schedule for the SAME file — G2 will try to fire at t=1.35s.
+	// Second Schedule for the SAME file — G2 will try to fire at t~2.5s.
 	// The fix requires this call to cancel G1.
 	sched.Schedule(route, stubFile, dir)
 
-	// t=1.1s: G1 (at t=1s) should have been cancelled. The file should still
-	// be "Queued" because G2 hasn't fired yet (it fires at t=1.35s).
-	time.Sleep(750 * time.Millisecond) // total elapsed ~1.05s
+	// t=2.25s: G1 (at t=2.0s) should have been cancelled. The file should
+	// still be "Queued" because G2 hasn't fired yet (it fires at t~2.5s).
+	// Margin: 250ms either side of the G1 firing window and 250ms before G2.
+	sleepUntil(start, 2250*time.Millisecond)
 
 	m := readTestJSON(t, stubFile)
 	if m["status"] == "Ready" {
-		t.Fatalf("stale goroutine stomped recreated file too early: status=Ready at t~1.05s; expected status=Queued (G1 should have been cancelled by second Schedule)")
+		t.Fatalf("stale goroutine stomped recreated file too early: status=Ready at t~2.25s; expected status=Queued (G1 should have been cancelled by second Schedule)")
 	}
 	if m["status"] != "Queued" {
-		t.Fatalf("unexpected status at t~1.05s: %v (want Queued)", m["status"])
+		t.Fatalf("unexpected status at t~2.25s: %v (want Queued)", m["status"])
 	}
 
-	// t=1.6s: G2 has fired (scheduled at t=0.35s + 1s delay = t=1.35s).
-	time.Sleep(550 * time.Millisecond) // total elapsed ~1.6s
+	// t=3.0s: G2 has fired (scheduled at t=0.5s + 2s delay = t=2.5s). 500ms margin.
+	sleepUntil(start, 3000*time.Millisecond)
 	m = readTestJSON(t, stubFile)
 	if m["status"] != "Ready" {
-		t.Fatalf("G2 did not fire: status=%v at t~1.6s (want Ready)", m["status"])
+		t.Fatalf("G2 did not fire: status=%v at t~3.0s (want Ready)", m["status"])
+	}
+}
+
+// sleepUntil sleeps the remainder of target since start. A no-op if already past.
+func sleepUntil(start time.Time, target time.Duration) {
+	remain := target - time.Since(start)
+	if remain > 0 {
+		time.Sleep(remain)
 	}
 }
 

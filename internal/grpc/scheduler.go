@@ -117,6 +117,13 @@ func (s *grpcTransitionScheduler) Schedule(route *config.GRPCRoute, filePath, co
 func (s *grpcTransitionScheduler) schedule(delay time.Duration, filePath string, c config.Case, configDir string) {
 	s.mu.Lock()
 	gen := s.gen
+	// If the current generation has already been cancelled (Stop or Reset
+	// is in flight), do not spawn — calling gen.wg.Add(1) while another
+	// goroutine is in gen.wg.Wait() with a zero counter panics.
+	if gen.ctx.Err() != nil {
+		s.mu.Unlock()
+		return
+	}
 	fileCtx, fileCancel := context.WithCancel(gen.ctx)
 	pm := &pendingMutation{cancel: fileCancel}
 	s.pending[filePath] = append(s.pending[filePath], pm)
@@ -192,6 +199,9 @@ func (s *grpcTransitionScheduler) CancelFile(filePath string) {
 }
 
 // Reset cancels all pending mutations and creates a fresh generation.
+// The pending map is cleared atomically with the generation swap so that
+// a concurrent Schedule() on the new generation does not see stale entries
+// from goroutines that are still draining their deferred cleanup.
 func (s *grpcTransitionScheduler) Reset(parent context.Context) {
 	ctx, cancel := context.WithCancel(parent)
 	newGen := &grpcSchedulerGeneration{ctx: ctx, cancel: cancel}
@@ -200,6 +210,7 @@ func (s *grpcTransitionScheduler) Reset(parent context.Context) {
 	oldGen := s.gen
 	oldGen.cancel()
 	s.gen = newGen
+	s.pending = make(map[string][]*pendingMutation)
 	s.mu.Unlock()
 
 	oldGen.wg.Wait()
