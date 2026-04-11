@@ -151,10 +151,17 @@ func (h *handler) serve(srv interface{}, stream grpc.ServerStream) error {
 
 				// Schedule deferred background mutations so the persisted
 				// file transitions on disk over time (e.g. Queued → Ready).
-				// Only after append (resource creation) — mirrors HTTP proxy.
-				if persistedPath != "" && strings.EqualFold(activeCase.Merge, "append") &&
-					len(route.Transitions) > 0 && h.scheduler != nil {
-					h.scheduler.Schedule(route, persistedPath, h.loader.ConfigDir())
+				// Mirrors HTTP proxy: any successful persist that has a route
+				// with transitions arms the timeline. For append (creation),
+				// rescheduling is the desired behaviour — Schedule() also
+				// cancels any stale timer from a delete+recreate. For update,
+				// only arm if no timeline is already pending for the file, so
+				// a client update during the provisioning window does not
+				// cancel an already-running ready transition.
+				if persistedPath != "" && len(route.Transitions) > 0 && h.scheduler != nil {
+					if strings.EqualFold(activeCase.Merge, "append") || !h.scheduler.HasPending(persistedPath) {
+						h.scheduler.Schedule(route, persistedPath, h.loader.ConfigDir())
+					}
 				}
 
 				// When a DELETE removes a resource, reset transition state so

@@ -244,6 +244,59 @@ func TestGRPCScheduler_CancelFile(t *testing.T) {
 	}
 }
 
+// TestGRPCScheduler_HasPending verifies the HasPending helper used by the
+// handler to skip rescheduling on merge="update" when a transition timeline
+// is already armed (preserves scenario 13/15 semantics: a client update
+// during the provisioning window must NOT cancel an in-flight ready timer).
+func TestGRPCScheduler_HasPending(t *testing.T) {
+	dir := t.TempDir()
+
+	defaultsPath := filepath.Join(dir, "defaults.json")
+	writeTestFile(t, defaultsPath, []byte(`{"status": "Ready"}`))
+
+	stubFile := filepath.Join(dir, "city.json")
+	writeTestFile(t, stubFile, []byte(`{"name": "rabat", "status": "Queued"}`))
+
+	route := &config.GRPCRoute{
+		Match:    "/continent.v1.CityService/CreateCity",
+		Fallback: "created",
+		Transitions: []config.Transition{
+			{Case: "provisioning", Duration: 5}, // long enough to inspect mid-flight
+			{Case: "ready"},
+		},
+		Cases: map[string]config.Case{
+			"created": {Persist: true, Merge: "append"},
+			"ready":   {Persist: true, Merge: "update", Defaults: "defaults.json"},
+		},
+	}
+
+	sched := newGRPCTransitionScheduler(context.Background())
+	defer sched.Stop()
+
+	// Nothing scheduled yet.
+	if sched.HasPending(stubFile) {
+		t.Error("HasPending should be false before Schedule")
+	}
+
+	sched.Schedule(route, stubFile, dir)
+
+	if !sched.HasPending(stubFile) {
+		t.Error("HasPending should be true after Schedule")
+	}
+
+	// Different file path — must be independent.
+	otherFile := filepath.Join(dir, "other.json")
+	if sched.HasPending(otherFile) {
+		t.Error("HasPending should be false for unrelated file")
+	}
+
+	// CancelFile drains the entry.
+	sched.CancelFile(stubFile)
+	if sched.HasPending(stubFile) {
+		t.Error("HasPending should be false after CancelFile")
+	}
+}
+
 func TestGRPCScheduler_ResetCancelsOldGeneration(t *testing.T) {
 	dir := t.TempDir()
 

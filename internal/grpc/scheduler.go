@@ -183,6 +183,15 @@ func (s *grpcTransitionScheduler) schedule(delay time.Duration, filePath string,
 	}()
 }
 
+// HasPending reports whether there is at least one in-flight deferred
+// mutation targeting the given filePath. Used by the handler's update path
+// to skip rescheduling when a transition timeline is already armed.
+func (s *grpcTransitionScheduler) HasPending(filePath string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.pending[filePath]) > 0
+}
+
 // CancelFile cancels any in-flight deferred mutations targeting the given
 // filePath. Called when a file is deleted (via handler's delete merge path)
 // or rescheduled (via Schedule) so stale goroutines cannot stomp a

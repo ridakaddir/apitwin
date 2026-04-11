@@ -156,6 +156,50 @@ func (r *Registry) FindRepeatedField(md *desc.MethodDescriptor) string {
 	return candidate
 }
 
+// RequestEntityField returns the JSON name of the unique request input
+// field whose message type equals the response output type. This is the
+// Google API convention for Update<X>Request, e.g.
+//
+//	UpdateDatabaseInstanceRequest { string name = 1; DatabaseInstance database_instance = 2; }
+//	→ returns "databaseInstance"
+//
+// Used to auto-derive a `source` extraction on persist cases where the user
+// did not set one explicitly, so the wrapper field is unwrapped on the way
+// in instead of being merged verbatim into the persisted file. Returns ""
+// if there is no matching input field, more than one (ambiguous), or md is
+// nil.
+func (r *Registry) RequestEntityField(md *desc.MethodDescriptor) string {
+	if md == nil {
+		return ""
+	}
+	outType := md.GetOutputType()
+	if outType == nil {
+		return ""
+	}
+	inType := md.GetInputType()
+	if inType == nil {
+		return ""
+	}
+	var candidate string
+	for _, f := range inType.GetFields() {
+		if f.IsRepeated() || f.IsMap() {
+			continue
+		}
+		mt := f.GetMessageType()
+		if mt == nil {
+			continue
+		}
+		if mt.GetFullyQualifiedName() != outType.GetFullyQualifiedName() {
+			continue
+		}
+		if candidate != "" {
+			return "" // ambiguous — more than one matching field
+		}
+		candidate = f.GetJSONName()
+	}
+	return candidate
+}
+
 // EntityFieldNames returns the set of JSON and proto field names defined on the
 // entity message identified by the wrap field of the response type. This is used
 // to filter persist data so that only fields belonging to the entity message are
