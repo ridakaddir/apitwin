@@ -1,7 +1,5 @@
 # gRPC Persistence
 
-[Home](../README.md) > [gRPC](README.md) > Persistence
-
 ---
 
 gRPC routes support the same directory-based persistence as HTTP routes. Each resource is stored as a separate JSON file.

@@ -1,7 +1,5 @@
 # gRPC Generation
 
-[Home](../README.md) > [gRPC](README.md) > Generation
-
 ---
 
 Scaffold a complete `[[grpc_routes]]` config and synthetic stub files from a `.proto` file in one command.

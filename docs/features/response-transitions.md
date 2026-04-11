@@ -1,7 +1,5 @@
 # Response Transitions
 
-[Home](../README.md) > [Features](README.md) > Response Transitions
-
 ---
 
 Automatically advance resources through a sequence of states over time. Useful for simulating visa processing, city verification workflows, country admission pipelines, or any state machine.

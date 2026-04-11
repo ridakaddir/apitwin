@@ -1,7 +1,5 @@
 # Cross-Endpoint References
 
-[Home](../README.md) > [Features](README.md) > Cross-Endpoint References
-
 ---
 
 Cross-endpoint references allow you to include data from other stub files in your responses using the `{{ref:...}}` syntax. This enables building interconnected mock APIs where endpoints reference and share data with optional filtering and transformation.

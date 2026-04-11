@@ -1,7 +1,5 @@
 # Record Mode
 
-[Home](../README.md) > [Features](README.md) > Record Mode
-
 ---
 
 Record mode proxies all requests to a real API, saves each response as a stub file, and immediately starts serving the stub on subsequent requests. The recorded latency is saved as the `delay` field so stubs replay at realistic speed.

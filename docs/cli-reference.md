@@ -1,9 +1,5 @@
 # CLI Reference
 
-[Home](README.md) > CLI Reference
-
----
-
 ## Usage
 
 ```

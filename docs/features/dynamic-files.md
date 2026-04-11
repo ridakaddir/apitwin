@@ -1,7 +1,5 @@
 # Dynamic File Resolution
 
-[Home](../README.md) > [Features](README.md) > Dynamic File Resolution
-
 ---
 
 Use `{source.field}` placeholders in `file` paths to resolve stub filenames from request data at runtime.

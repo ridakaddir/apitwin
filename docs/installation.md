@@ -1,9 +1,5 @@
 # Installation
 
-[Home](README.md)
-
----
-
 ## npm (recommended)
 
 Best for frontend projects. Installs a platform-specific binary as a dev dependency:

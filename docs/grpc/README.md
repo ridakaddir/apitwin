@@ -1,7 +1,5 @@
 # gRPC
 
-[Home](../README.md) > gRPC
-
 ---
 
 apitwin supports gRPC mock and proxy alongside the HTTP server — both run in the same process, activated by `--grpc-proto`.

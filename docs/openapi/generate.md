@@ -1,7 +1,5 @@
 # OpenAPI Generate Command
 
-[Home](../README.md) > [OpenAPI](README.md) > Generate
-
 ---
 
 ## Usage

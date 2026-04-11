@@ -1,7 +1,5 @@
 # Features
 
-[Home](../README.md) > Features
-
 ---
 
 apitwin provides a rich set of features for mocking, stubbing, and proxying APIs. This section covers each feature in detail.

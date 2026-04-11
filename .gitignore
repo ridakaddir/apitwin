@@ -60,5 +60,10 @@ examples/openapi-generate/mocks-single/
 
 # VitePress docs build output and dependencies
 /website/node_modules/
-/website/docs/.vitepress/dist/
-/website/docs/.vitepress/cache/
+/website/.vitepress/dist/
+/website/.vitepress/cache/
+# VitePress builds .md content from /docs/, but Vite/Rollup walks up from each
+# .md file looking for node_modules. We satisfy that with a symlink that
+# points back into /website/node_modules — recreated by `pnpm prebuild` /
+# `pnpm predev`. Never tracked in git.
+/docs/node_modules

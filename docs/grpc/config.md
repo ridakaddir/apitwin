@@ -1,7 +1,5 @@
 # gRPC Configuration
 
-[Home](../README.md) > [gRPC](README.md) > Configuration
-
 ---
 
 gRPC routes live in the same config files as HTTP routes. All existing features work: conditions, transitions, fallback, delay, and template tokens.

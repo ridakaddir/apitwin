@@ -1,7 +1,5 @@
 # Stub Quality
 
-[Home](../README.md) > [OpenAPI](README.md) > Stub Quality
-
 ---
 
 When generating from an OpenAPI spec, stubs are populated using the best available data from the spec.

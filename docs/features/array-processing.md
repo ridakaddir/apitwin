@@ -1,7 +1,5 @@
 # Array Processing with `$each` / `$template`
 
-[Home](../README.md) > [Features](README.md) > Array Processing
-
 ---
 
 Process arrays from cross-endpoint references by iterating over each item and applying a template to reshape or enrich the data. This is useful for building responses that combine data from multiple stub directories.

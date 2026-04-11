@@ -1,7 +1,5 @@
 # Config Formats
 
-[Home](../README.md) > [Configuration](README.md) > Formats
-
 ---
 
 apitwin auto-detects the config format from the file extension. All three formats support the same feature set.

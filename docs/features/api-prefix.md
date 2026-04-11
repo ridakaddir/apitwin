@@ -1,7 +1,5 @@
 # API Prefix
 
-[Home](../README.md) > [Features](README.md) > API Prefix
-
 ---
 
 Use `--api-prefix` when your frontend calls `/api/*` but the real upstream uses bare paths (`/countries`, `/cities`).

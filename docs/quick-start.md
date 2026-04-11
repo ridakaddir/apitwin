@@ -1,9 +1,5 @@
 # Quick Start
 
-[Home](README.md) > Quick Start
-
----
-
 ## HTTP — from an OpenAPI spec
 
 Generate a complete mock config from any OpenAPI 3 spec and start serving immediately:

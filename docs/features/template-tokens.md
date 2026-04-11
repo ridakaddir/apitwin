@@ -1,7 +1,5 @@
 # Template Tokens
 
-[Home](../README.md) > [Features](README.md) > Template Tokens
-
 ---
 
 apitwin supports template tokens in inline JSON values, file-based stubs, directory aggregations, and defaults files. Tokens are replaced with generated values or referenced data at request time.

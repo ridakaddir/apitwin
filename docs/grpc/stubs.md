@@ -1,7 +1,5 @@
 # gRPC Stubs & Conditions
 
-[Home](../README.md) > [gRPC](README.md) > Stubs & Conditions
-
 ---
 
 ## Stub file format

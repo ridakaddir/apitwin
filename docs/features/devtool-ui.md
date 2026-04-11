@@ -1,7 +1,5 @@
 # Devtool UI
 
-[Home](../README.md) > [Features](README.md) > Devtool UI
-
 ---
 
 apitwin ships with an embedded browser dashboard for inspecting your mocked routes, testing requests, and watching config changes in real time. The UI is a React SPA bundled into the Go binary via `go:embed` — no extra install or flags required.
