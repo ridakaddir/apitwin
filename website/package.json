@@ -5,9 +5,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vitepress dev docs",
-    "build": "vitepress build docs",
-    "preview": "vitepress preview docs"
+    "link-deps": "node -e \"const fs=require('fs'),p=require('path');const t=p.resolve('../docs/node_modules');try{fs.lstatSync(t)}catch{fs.symlinkSync('../website/node_modules',t,process.platform==='win32'?'junction':'dir')}\"",
+    "predev": "pnpm link-deps",
+    "prebuild": "pnpm link-deps",
+    "prepreview": "pnpm link-deps",
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
   },
   "devDependencies": {
     "vitepress": "^1.6.4"

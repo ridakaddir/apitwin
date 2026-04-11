@@ -1,7 +1,5 @@
 # Cases
 
-[Home](../README.md) > [Configuration](README.md) > Cases
-
 ---
 
 Cases are named response definitions attached to a route. Each route can have multiple cases — one is selected at request time based on [conditions](../features/conditions.md), [transitions](../features/response-transitions.md), or the route's `fallback`.

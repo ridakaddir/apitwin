@@ -2,9 +2,42 @@ import { defineConfig } from 'vitepress'
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
+  // Read markdown content from the top-level `docs/` tree (one source of
+  // truth for both GitHub's native renderer and the VitePress site). All
+  // Node tooling stays under `website/`; `docs/` contains only markdown.
+  srcDir: '../docs',
+
+  // Dead-link validation is disabled: some docs link out to the `examples/`
+  // code directory (e.g. `../examples/grpc-wrap`) which VitePress doesn't
+  // serve. Those links are intentional and render correctly on GitHub.
   ignoreDeadLinks: true,
+
+  // `docs/README.md` is the GitHub-facing TOC; the VitePress home page lives
+  // in `docs/index.md`. Exclude README.md so VitePress doesn't try to build
+  // both as conflicting routes.
+  srcExclude: ['README.md'],
+
+  // Every directory uses `README.md` as its index (GitHub convention). Rewrite
+  // any nested `README.md` to `index.md` at build time so VitePress treats
+  // `docs/features/README.md` as the `/features/` landing page. The top-level
+  // `docs/README.md` is excluded above and doesn't hit this rewrite.
+  rewrites(id) {
+    return id.replace(/(^|\/)README\.md$/, '$1index.md')
+  },
+
   markdown: {
-    theme: 'github-dark-default'
+    theme: 'github-dark-default',
+    // Auto-apply `v-pre` to every inline `code` token so Vue doesn't try to
+    // interpret mustache syntax like `{{uuid}}` or `{{ref:...}}` that appears
+    // throughout the docs. Fenced code blocks are already `v-pre` by default.
+    // This removes the need for any per-file `<code v-pre>…</code>` wrapping.
+    config: (md) => {
+      const defaultRender = md.renderer.rules.code_inline!
+      md.renderer.rules.code_inline = (tokens, idx, options, env, self) => {
+        tokens[idx].attrSet('v-pre', '')
+        return defaultRender(tokens, idx, options, env, self)
+      }
+    }
   },
   title: 'apitwin',
   description: 'A fast, zero-dependency CLI tool for mocking, stubbing, and proxying HTTP and gRPC APIs',

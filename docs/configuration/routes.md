@@ -1,7 +1,5 @@
 # Routes
 
-[Home](../README.md) > [Configuration](README.md) > Routes
-
 ---
 
 ## Route fields

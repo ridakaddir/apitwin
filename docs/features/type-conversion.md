@@ -1,7 +1,5 @@
 # Type Conversion with `$as`
 
-[Home](../README.md) > [Features](README.md) > Type Conversion
-
 ---
 
 Convert data between types using the `$as` directive. This is useful when a reference resolves to one type (e.g. an array of objects) but you need a different type (e.g. a single merged object).

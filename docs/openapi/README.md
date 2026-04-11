@@ -1,7 +1,5 @@
 # OpenAPI Generation
 
-[Home](../README.md) > OpenAPI
-
 ---
 
 Generate a complete apitwin config directory from an OpenAPI 3 spec in one command. Works with local files and remote URLs.

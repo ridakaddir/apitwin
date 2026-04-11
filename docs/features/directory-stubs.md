@@ -1,7 +1,5 @@
 # Directory-Based Stub Storage
 
-[Home](../README.md) > [Features](README.md) > Directory-Based Stubs
-
 ---
 
 When `persist: true`, mutating requests operate on individual JSON files stored in directories. Each resource is a separate file, enabling a "single source of truth" convention.

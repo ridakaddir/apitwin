@@ -1,7 +1,5 @@
 # Hot Reload
 
-[Home](../README.md) > [Features](README.md) > Hot Reload
-
 ---
 
 apitwin watches the config file or directory for changes using filesystem notifications. Edit a case, change a `fallback`, or drop a new `.toml` file into the config directory — the next request picks up the changes with no restart.

@@ -1,7 +1,5 @@
 # Configuration
 
-[Home](../README.md) > Configuration
-
 ---
 
 apitwin supports `.toml`, `.yaml`/`.yml`, and `.json` config files — auto-detected by file extension.

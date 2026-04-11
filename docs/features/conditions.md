@@ -1,7 +1,5 @@
 # Conditions
 
-[Home](../README.md) > [Features](README.md) > Conditions
-
 ---
 
 Conditions let you route requests to different response cases based on request data. They are evaluated top-to-bottom — the first passing condition activates its case. If none match, the route's `fallback` case is used.

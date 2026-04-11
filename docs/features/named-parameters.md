@@ -1,7 +1,5 @@
 # Named Path Parameters
 
-[Home](../README.md) > [Features](README.md) > Named Parameters
-
 ---
 
 apitwin supports `{name}` placeholders in route patterns to extract values from URL paths. Extracted values can be used for key resolution, conditions, and dynamic file paths.

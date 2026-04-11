@@ -1,7 +1,5 @@
 # gRPC Quick Start
 
-[Home](../README.md) > [gRPC](README.md) > Quick Start
-
 ---
 
 ## Generate and serve
