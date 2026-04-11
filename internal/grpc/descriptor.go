@@ -234,6 +234,31 @@ func (r *Registry) RequestEntityField(md *desc.MethodDescriptor) (name string, a
 	return src, amb
 }
 
+// ResponseWrap returns the JSON name of the response type's unique wrapper
+// field — the single non-repeated, non-map message field on the output type.
+// Returns "" when the response has zero, two, or more such fields, or when
+// the lone field is a scalar (shape 1 direct-entity response: the response
+// IS the entity, no wrap needed).
+//
+// Used by applyGRPCPersist when the user has explicitly set c.Source but left
+// c.Wrap empty: the source-driven extraction plus the response wrapper
+// inference are independent concerns, so having an explicit source should
+// not disable wrap inference from the response type.
+func (r *Registry) ResponseWrap(md *desc.MethodDescriptor) string {
+	if md == nil {
+		return ""
+	}
+	outType := md.GetOutputType()
+	if outType == nil {
+		return ""
+	}
+	wrapField := uniqueNonRepeatedMessageField(outType)
+	if wrapField == nil {
+		return ""
+	}
+	return wrapField.GetJSONName()
+}
+
 // uniqueRequestFieldOfType returns the JSON name of the single non-repeated,
 // non-map message-typed field in inType whose message type matches fqn, or
 // ("", true) when more than one field matches (ambiguous). Scalars and

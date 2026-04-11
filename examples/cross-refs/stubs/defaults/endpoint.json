@@ -5,8 +5,8 @@
   "region": "{.region}",
   "createdAt": "{{now}}",
   "deploymentId": "{{uuid}}",
-  "models": "{{ref:environments/{path.env}/models/}}",
-  "tenantConfig": "{{ref:tenants/{path.tenantId}/configs/{path.env}.json}}",
+  "models": "{{ref:stubs/environments/{path.env}/models/}}",
+  "tenantConfig": "{{ref:stubs/tenants/{path.tenantId}/configs/{path.env}.json}}",
   "metadata": {
     "creator": "{header.X-User-Id}",
     "version": "{.version}"

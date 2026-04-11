@@ -52,8 +52,8 @@ Use request data to dynamically resolve refs in defaults files:
 {
   "environment": "{path.env}",
   "tenantId": "{path.tenantId}",
-  "models": "{{ref:environments/{path.env}/models/}}",
-  "config": "{{ref:tenants/{path.tenantId}/configs/{path.env}.json}}"
+  "models": "{{ref:stubs/environments/{path.env}/models/}}",
+  "config": "{{ref:stubs/tenants/{path.tenantId}/configs/{path.env}.json}}"
 }
 ```
 

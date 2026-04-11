@@ -64,6 +64,15 @@ func (h *handler) applyGRPCPersist(
 		if wrapField == "" {
 			wrapField = derivedWrap
 		}
+	} else if wrapField == "" {
+		// Explicit source, implicit wrap: source extraction and response
+		// wrapping are independent concerns, so setting source should not
+		// opt the user out of wrap inference. Without this, a deep source
+		// like "terrain.summit" against a response-wrapped RPC (e.g.
+		// UpdateSummitResponse { Summit summit = 1; }) writes the extracted
+		// entity directly into the outer response message and fails proto
+		// round-trip on encode ("no known field named <entity-field>").
+		wrapField = h.registry.ResponseWrap(md)
 	}
 	srcMap := reqMap
 	if sourceField != "" {
