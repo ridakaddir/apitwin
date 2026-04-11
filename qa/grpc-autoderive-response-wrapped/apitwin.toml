@@ -1,0 +1,91 @@
+# QA harness: gRPC response-wrapped auto-derive + persist
+#
+# Reproduces the UpdateGateway corruption reported against beta.12 using the
+# continent/country/city domain. Two RPCs are exercised:
+#
+#   PatchCity   — direct-entity response shape. Works pre-fix (regression guard).
+#   UpdateCity  — response-wrapped shape (UpdateCityResponse { City city = 1; }).
+#                 Transition `ready` case has no explicit source/wrap, so
+#                 auto-derive must infer both to avoid corrupting the stub.
+#
+# Transition timeline for both RPCs:
+#   t = 0s     → fallback ("patched" / "updated")
+#   t ≥ 2s     → "ready"
+
+########################################
+# Shape A — direct-entity response (regression guard)
+########################################
+
+[[grpc_routes]]
+match    = "/geo.CityService/PatchCity"
+fallback = "patched"
+
+  [[grpc_routes.transitions]]
+  case     = "provisioning"
+  duration = 2
+
+  [[grpc_routes.transitions]]
+  case = "ready"
+
+  [grpc_routes.cases.patched]
+  status   = 0
+  file     = "stubs/cities_patch/{body.id}.json"
+  persist  = true
+  merge    = "update"
+  # No explicit source/wrap — auto-derive must pick the single `city` field
+  # whose message type equals the response output type (City).
+  defaults = "defaults/city-provisioning.json"
+
+  [grpc_routes.cases.ready]
+  status   = 0
+  file     = "stubs/cities_patch/{body.id}.json"
+  persist  = true
+  merge    = "update"
+  # Also no explicit source/wrap. After transition, a second request must
+  # land on this case and merge cleanly.
+  defaults = "defaults/city-ready.json"
+
+########################################
+# Shape B — response-wrapped (the bug)
+########################################
+
+[[grpc_routes]]
+match    = "/geo.CityService/UpdateCity"
+fallback = "updated"
+
+  [[grpc_routes.transitions]]
+  case     = "provisioning"
+  duration = 2
+
+  [[grpc_routes.transitions]]
+  case = "ready"
+
+  [grpc_routes.cases.updated]
+  status   = 0
+  file     = "stubs/cities_wrapped/{body.cityName}.json"
+  persist  = true
+  merge    = "update"
+  # Explicit source + wrap — this path should always work regardless of
+  # auto-derive. Mirrors the user's `updated` fallback case.
+  source   = "city"
+  wrap     = "city"
+  defaults = "defaults/city-provisioning.json"
+
+  [grpc_routes.cases.ready]
+  status   = 0
+  file     = "stubs/cities_wrapped/{body.cityName}.json"
+  persist  = true
+  merge    = "update"
+  # INTENTIONALLY no source/wrap. This is the TOML shape the user ran for
+  # UpdateGateway's ready case and the one that corrupts the stub pre-fix.
+  # Auto-derive must infer source="city" + wrap="city" from the proto, where
+  # the response UpdateCityResponse wraps `City city = 1;`.
+  defaults = "defaults/city-ready.json"
+
+[[grpc_routes]]
+match    = "/geo.CityService/GetCity"
+fallback = "found"
+
+  [grpc_routes.cases.found]
+  file = "stubs/cities_wrapped/{body.name}.json"
+  wrap = "city"

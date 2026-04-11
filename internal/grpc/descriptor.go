@@ -156,40 +156,90 @@ func (r *Registry) FindRepeatedField(md *desc.MethodDescriptor) string {
 	return candidate
 }
 
-// RequestEntityField returns the JSON name of the unique request input
-// field whose message type equals the response output type. This is the
-// Google API convention for Update<X>Request, e.g.
+// RequestEntity looks up the request field that holds the entity the RPC is
+// operating on, and (when applicable) the response wrapper field it should
+// be returned under. It covers two Google API conventions:
 //
-//	UpdateDatabaseInstanceRequest { string name = 1; DatabaseInstance database_instance = 2; }
-//	→ returns ("databaseInstance", false)
+//  1. Direct-entity response — the response message IS the entity. Returns
+//     (source, "", false) where source is the JSON name of the unique
+//     request field whose message type equals the response output type:
 //
-// Used to auto-derive a `source` extraction on persist cases where the
-// user did not set one explicitly, so the wrapper field is unwrapped on
-// the way in instead of being merged verbatim into the persisted file.
+//	     rpc UpdateDatabaseInstance(UpdateDatabaseInstanceRequest) returns (DatabaseInstance)
+//	     UpdateDatabaseInstanceRequest { string name = 1; DatabaseInstance database_instance = 2; }
+//	     → ("databaseInstance", "", false)
 //
-// Returns ("", false) when there is no matching input field or md is nil
-// (the common no-Google-convention case — silent skip is correct). Returns
-// ("", true) when more than one input field matches the response output
-// type (ambiguous — caller should warn so the user can disambiguate by
-// setting `source` explicitly).
+//  2. Response-wrapped — the response wraps the entity under a single
+//     message field. Returns (source, wrap, false) where source is the
+//     matching request field and wrap is the response wrapper field:
 //
-// The match is done on fully-qualified message names, so wrapper-style
-// response envelopes like google.protobuf.Empty or google.longrunning.Operation
-// are unaffected unless the request happens to have a field of that exact
-// type.
-func (r *Registry) RequestEntityField(md *desc.MethodDescriptor) (name string, ambiguous bool) {
+//	     rpc UpdateGateway(UpdateGatewayRequest) returns (UpdateGatewayResponse)
+//	     UpdateGatewayResponse { Gateway gateway = 1; }
+//	     UpdateGatewayRequest  { GatewayParent parent = 1; string gateway_name = 2; Gateway gateway = 3; }
+//	     → ("gateway", "gateway", false)
+//
+// Shape 1 is tried first. Shape 2 is the fallback: it applies only when the
+// response type has exactly one non-repeated, non-map message field — that
+// field's type is then treated as the entity type. Scalars, repeated, and
+// map fields in the request are ignored by both shapes, so a prefix-
+// colliding scalar like `string gateway_name = 2;` cannot trip the match.
+//
+// Returns ("", "", false) when no shape matches or md is nil (silent skip:
+// the caller should leave source/wrap at the explicit config value, which
+// defaults to untouched merge behaviour). Returns ("", "", true) when the
+// matching shape has more than one request field of the entity type
+// (ambiguous — caller should warn so the user can disambiguate by setting
+// `source` explicitly). Matching is always done on fully-qualified message
+// names.
+func (r *Registry) RequestEntity(md *desc.MethodDescriptor) (source, wrap string, ambiguous bool) {
 	if md == nil {
-		return "", false
+		return "", "", false
 	}
 	outType := md.GetOutputType()
 	if outType == nil {
-		return "", false
+		return "", "", false
 	}
 	inType := md.GetInputType()
 	if inType == nil {
-		return "", false
+		return "", "", false
 	}
-	outFQN := outType.GetFullyQualifiedName()
+
+	// Shape 1: response IS the entity.
+	if src, amb := uniqueRequestFieldOfType(inType, outType.GetFullyQualifiedName()); amb {
+		return "", "", true
+	} else if src != "" {
+		return src, "", false
+	}
+
+	// Shape 2: response WRAPS a single entity field.
+	wrapField := uniqueNonRepeatedMessageField(outType)
+	if wrapField == nil {
+		return "", "", false
+	}
+	entityFQN := wrapField.GetMessageType().GetFullyQualifiedName()
+	src, amb := uniqueRequestFieldOfType(inType, entityFQN)
+	if amb {
+		return "", "", true
+	}
+	if src == "" {
+		return "", "", false
+	}
+	return src, wrapField.GetJSONName(), false
+}
+
+// RequestEntityField is a backwards-compatible shim around RequestEntity
+// that returns only the source field and ambiguity flag. New callers should
+// use RequestEntity directly to also pick up the inferred wrap.
+func (r *Registry) RequestEntityField(md *desc.MethodDescriptor) (name string, ambiguous bool) {
+	src, _, amb := r.RequestEntity(md)
+	return src, amb
+}
+
+// uniqueRequestFieldOfType returns the JSON name of the single non-repeated,
+// non-map message-typed field in inType whose message type matches fqn, or
+// ("", true) when more than one field matches (ambiguous). Scalars and
+// repeated / map fields are always skipped, so request fields like
+// `string gateway_name = 2;` cannot trigger a false match on "gateway".
+func uniqueRequestFieldOfType(inType *desc.MessageDescriptor, fqn string) (name string, ambiguous bool) {
 	var candidate string
 	for _, f := range inType.GetFields() {
 		if f.IsRepeated() || f.IsMap() {
@@ -199,15 +249,38 @@ func (r *Registry) RequestEntityField(md *desc.MethodDescriptor) (name string, a
 		if mt == nil {
 			continue
 		}
-		if mt.GetFullyQualifiedName() != outFQN {
+		if mt.GetFullyQualifiedName() != fqn {
 			continue
 		}
 		if candidate != "" {
-			return "", true // ambiguous — more than one matching field
+			return "", true
 		}
 		candidate = f.GetJSONName()
 	}
 	return candidate, false
+}
+
+// uniqueNonRepeatedMessageField returns the lone non-repeated, non-map
+// message-typed field of outType, or nil when outType has zero, two, or
+// more such fields. Used to detect "response wrapper" message shapes like
+// UpdateGatewayResponse { Gateway gateway = 1; } — messages with additional
+// scalar or repeated fields are deliberately not unwrapped because there is
+// no safe way to pick one.
+func uniqueNonRepeatedMessageField(outType *desc.MessageDescriptor) *desc.FieldDescriptor {
+	var candidate *desc.FieldDescriptor
+	for _, f := range outType.GetFields() {
+		if f.IsRepeated() || f.IsMap() {
+			return nil
+		}
+		if f.GetMessageType() == nil {
+			return nil
+		}
+		if candidate != nil {
+			return nil
+		}
+		candidate = f
+	}
+	return candidate
 }
 
 // EntityFieldNames returns the set of JSON and proto field names defined on the

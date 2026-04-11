@@ -34,24 +34,36 @@ func (h *handler) applyGRPCPersist(
 	// before any other processing. This lets callers persist a nested entity
 	// (e.g. "service") without polluting the stub with wrapper fields.
 	//
-	// If source is unset, fall back to the proto descriptor: when the request
-	// input type has a field whose message type equals the response output
-	// type (the Google Update<X>Request { X x = 2; ... } convention),
-	// auto-extract that field. This prevents the request envelope (e.g.
-	// {name, databaseInstance: {...}, updateMask}) from being shallow-merged
-	// into a flat entity stub on `merge="update"`, which would corrupt the
-	// file with both flat fields and a duplicated nested wrapper.
+	// If source is unset, fall back to the proto descriptor via
+	// Registry.RequestEntity, which handles two Google API shapes:
+	//   1. Direct-entity response — response type == entity type. The
+	//      request field whose message type matches the response is picked.
+	//   2. Response-wrapped — response has a single non-repeated message
+	//      field (e.g. UpdateGatewayResponse { Gateway gateway = 1; }).
+	//      The request field whose type matches that wrapper field's type
+	//      is picked, and the wrapper field's JSON name is returned as
+	//      the inferred wrap.
+	//
+	// Without this, the request envelope (e.g. {parent, cityName, city})
+	// would be shallow-merged into a flat entity stub on `merge="update"`,
+	// which would corrupt the file with both flat fields and a duplicated
+	// nested wrapper, and break proto round-trip on encode.
 	//
 	// When the input has multiple matching fields the auto-derive bails
 	// (ambiguous=true) and we log a deduplicated warn so the user has a
-	// breadcrumb to set `source` explicitly.
+	// breadcrumb to set `source` explicitly. Explicit `c.Source` always
+	// wins and short-circuits auto-derive entirely.
 	sourceField := c.Source
+	wrapField := c.Wrap
 	if sourceField == "" {
-		derived, ambiguous := h.registry.RequestEntityField(md)
+		derivedSrc, derivedWrap, ambiguous := h.registry.RequestEntity(md)
 		if ambiguous {
 			h.warnAutoDeriveAmbiguousOnce(fullMethod)
 		}
-		sourceField = derived
+		sourceField = derivedSrc
+		if wrapField == "" {
+			wrapField = derivedWrap
+		}
 	}
 	srcMap := reqMap
 	if sourceField != "" {
@@ -72,12 +84,13 @@ func (h *handler) applyGRPCPersist(
 	// loadGRPCDefaults for template lookups since defaults may reference routing fields.
 	persistData := stripPathPlaceholderFields(c.File, srcMap)
 
-	// When wrap is set, filter persistData to only fields valid in the entity
-	// message. This prevents routing fields from the request (e.g. orgId,
-	// providerId) from leaking into the persisted stub and causing proto
-	// encoding failures on the response.
-	if c.Wrap != "" && md != nil {
-		if allowed := h.registry.EntityFieldNames(md, c.Wrap); allowed != nil {
+	// When wrap is set (explicitly or via auto-derive), filter persistData
+	// to only fields valid in the entity message. This prevents routing
+	// fields from the request (e.g. orgId, providerId) from leaking into
+	// the persisted stub and causing proto encoding failures on the
+	// response.
+	if wrapField != "" && md != nil {
+		if allowed := h.registry.EntityFieldNames(md, wrapField); allowed != nil {
 			persistData = filterToEntityFields(persistData, allowed)
 		}
 	}
@@ -104,8 +117,8 @@ func (h *handler) applyGRPCPersist(
 			return codes.Internal, true, nil, ""
 		}
 		logger.LogGRPC(fullMethod, codes.OK, time.Since(start), logger.SourceStub)
-		if c.Wrap != "" {
-			return codes.OK, true, map[string]interface{}{c.Wrap: updated}, filePath
+		if wrapField != "" {
+			return codes.OK, true, map[string]interface{}{wrapField: updated}, filePath
 		}
 		return codes.OK, true, updated, filePath
 
@@ -124,8 +137,8 @@ func (h *handler) applyGRPCPersist(
 			return codes.Internal, true, nil, ""
 		}
 		logger.LogGRPC(fullMethod, codes.OK, time.Since(start), logger.SourceStub)
-		if c.Wrap != "" {
-			return codes.OK, true, map[string]interface{}{c.Wrap: appended}, createdPath
+		if wrapField != "" {
+			return codes.OK, true, map[string]interface{}{wrapField: appended}, createdPath
 		}
 		return codes.OK, true, appended, createdPath
 
