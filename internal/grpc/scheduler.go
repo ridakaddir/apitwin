@@ -18,9 +18,16 @@ import (
 // persist=true, merge="update", and a non-empty defaults path schedules a
 // goroutine that sleeps for the cumulative duration, then applies the case's
 // defaults to the created file.
+//
+// In-flight goroutines are tracked by target file path so that a subsequent
+// Schedule() for the same file — or an explicit CancelFile() — cancels any
+// stale pending mutations. Without this, a delete+recreate sequence leaves a
+// goroutine from the original create which then stomps the recreated file
+// with the wrong defaults before its own transition window elapses.
 type grpcTransitionScheduler struct {
-	mu  sync.Mutex
-	gen *grpcSchedulerGeneration
+	mu      sync.Mutex
+	gen     *grpcSchedulerGeneration
+	pending map[string][]*pendingMutation // keyed on target filePath
 }
 
 type grpcSchedulerGeneration struct {
@@ -29,10 +36,18 @@ type grpcSchedulerGeneration struct {
 	wg     sync.WaitGroup
 }
 
+// pendingMutation is a single in-flight scheduled update for a given filePath.
+// Each entry owns its own context derived from the generation context so it
+// can be cancelled individually without affecting other files.
+type pendingMutation struct {
+	cancel context.CancelFunc
+}
+
 func newGRPCTransitionScheduler(parent context.Context) *grpcTransitionScheduler {
 	ctx, cancel := context.WithCancel(parent)
 	return &grpcTransitionScheduler{
-		gen: &grpcSchedulerGeneration{ctx: ctx, cancel: cancel},
+		gen:     &grpcSchedulerGeneration{ctx: ctx, cancel: cancel},
+		pending: make(map[string][]*pendingMutation),
 	}
 }
 
@@ -41,10 +56,19 @@ func newGRPCTransitionScheduler(parent context.Context) *grpcTransitionScheduler
 //
 // filePath is the absolute path to the file created by the append operation.
 // configDir is needed to resolve relative defaults file paths.
+//
+// Any in-flight goroutines targeting the same filePath are cancelled before
+// the new ones are spawned. This prevents stale mutations from a previous
+// create (e.g. after a delete+recreate of the same resource) from stomping
+// the newly-created file with the wrong defaults.
 func (s *grpcTransitionScheduler) Schedule(route *config.GRPCRoute, filePath, configDir string) {
 	if len(route.Transitions) < 2 {
 		return
 	}
+
+	// Cancel any stale in-flight goroutines for this file path so a
+	// recreated resource starts with a clean timeline.
+	s.CancelFile(filePath)
 
 	var cumulative int64
 	for i := 0; i < len(route.Transitions); i++ {
@@ -83,6 +107,9 @@ func (s *grpcTransitionScheduler) Schedule(route *config.GRPCRoute, filePath, co
 // schedule spawns a single goroutine that waits for delay, then applies
 // the case's defaults to the file via persist.Update.
 //
+// Each goroutine owns a per-file context derived from the generation context
+// so CancelFile can cancel it individually without touching other files.
+//
 // NOTE: unlike the HTTP proxy scheduler, no request context (refCtx) is
 // passed here. gRPC defaults use renderGRPCTemplate which handles {{uuid}},
 // {{now}}, etc. If future defaults files need request-scoped placeholders,
@@ -90,11 +117,39 @@ func (s *grpcTransitionScheduler) Schedule(route *config.GRPCRoute, filePath, co
 func (s *grpcTransitionScheduler) schedule(delay time.Duration, filePath string, c config.Case, configDir string) {
 	s.mu.Lock()
 	gen := s.gen
+	// If the current generation has already been cancelled (Stop or Reset
+	// is in flight), do not spawn — calling gen.wg.Add(1) while another
+	// goroutine is in gen.wg.Wait() with a zero counter panics.
+	if gen.ctx.Err() != nil {
+		s.mu.Unlock()
+		return
+	}
+	fileCtx, fileCancel := context.WithCancel(gen.ctx)
+	pm := &pendingMutation{cancel: fileCancel}
+	s.pending[filePath] = append(s.pending[filePath], pm)
 	gen.wg.Add(1)
 	s.mu.Unlock()
 
 	go func() {
 		defer gen.wg.Done()
+		defer func() {
+			// Remove this entry from the pending map once the goroutine is
+			// done (either fired or was cancelled). Safe if already removed
+			// by CancelFile.
+			s.mu.Lock()
+			list := s.pending[filePath]
+			for i, entry := range list {
+				if entry == pm {
+					s.pending[filePath] = append(list[:i], list[i+1:]...)
+					break
+				}
+			}
+			if len(s.pending[filePath]) == 0 {
+				delete(s.pending, filePath)
+			}
+			s.mu.Unlock()
+			fileCancel() // idempotent
+		}()
 
 		timer := time.NewTimer(delay)
 		defer timer.Stop()
@@ -122,13 +177,31 @@ func (s *grpcTransitionScheduler) schedule(delay time.Duration, filePath string,
 			logger.Info("grpc deferred transition applied",
 				"file", filePath, "defaults", c.Defaults, "delay", delay.String())
 
-		case <-gen.ctx.Done():
+		case <-fileCtx.Done():
 			return
 		}
 	}()
 }
 
+// CancelFile cancels any in-flight deferred mutations targeting the given
+// filePath. Called when a file is deleted (via handler's delete merge path)
+// or rescheduled (via Schedule) so stale goroutines cannot stomp a
+// subsequently-recreated file.
+func (s *grpcTransitionScheduler) CancelFile(filePath string) {
+	s.mu.Lock()
+	entries := s.pending[filePath]
+	delete(s.pending, filePath)
+	s.mu.Unlock()
+
+	for _, pm := range entries {
+		pm.cancel()
+	}
+}
+
 // Reset cancels all pending mutations and creates a fresh generation.
+// The pending map is cleared atomically with the generation swap so that
+// a concurrent Schedule() on the new generation does not see stale entries
+// from goroutines that are still draining their deferred cleanup.
 func (s *grpcTransitionScheduler) Reset(parent context.Context) {
 	ctx, cancel := context.WithCancel(parent)
 	newGen := &grpcSchedulerGeneration{ctx: ctx, cancel: cancel}
@@ -137,6 +210,7 @@ func (s *grpcTransitionScheduler) Reset(parent context.Context) {
 	oldGen := s.gen
 	oldGen.cancel()
 	s.gen = newGen
+	s.pending = make(map[string][]*pendingMutation)
 	s.mu.Unlock()
 
 	oldGen.wg.Wait()

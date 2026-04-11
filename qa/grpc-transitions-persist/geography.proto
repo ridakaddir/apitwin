@@ -1,0 +1,103 @@
+syntax = "proto3";
+
+package geography;
+option go_package = "github.com/ridakaddir/apitwin/qa/geography";
+
+service GeographyService {
+  // Scenarios 01-04, 09, 10, 11: baseline create/get/list/update/delete
+  rpc CreateCountry(CreateCountryRequest) returns (Country);
+  rpc GetCountry(GetCountryRequest) returns (Country);
+  rpc ListCountries(ListCountriesRequest) returns (ListCountriesResponse);
+  rpc UpdateCountry(UpdateCountryRequest) returns (Country);
+  rpc DeleteCountry(DeleteCountryRequest) returns (DeleteCountryResponse);
+
+  // Scenario 05: persist nested sub-object via source="country"
+  rpc CreateCountryWithSource(CreateCountryWithSourceRequest) returns (CountryEnvelope);
+  rpc GetCountryWithSource(GetCountryRequest) returns (CountryEnvelope);
+
+  // Scenario 06: wrap="country" on both create and transition ready case
+  rpc CreateCountryWrapped(CreateCountryRequest) returns (CountryEnvelope);
+  rpc GetCountryWrapped(GetCountryRequest) returns (CountryEnvelope);
+
+  // Scenario 07: transition ready case with missing defaults
+  rpc CreateCountryMissingDefaults(CreateCountryRequest) returns (Country);
+  rpc GetCountryMissingDefaults(GetCountryRequest) returns (Country);
+
+  // Scenario 08: transition case name == fallback name
+  rpc CreateCountryFallbackTrap(CreateCountryRequest) returns (Country);
+  rpc GetCountryFallbackTrap(GetCountryRequest) returns (Country);
+
+  // Scenario 12: conditions + transitions
+  rpc CreateCountryConditioned(CreateCountryRequest) returns (Country);
+  rpc GetCountryConditioned(GetCountryRequest) returns (Country);
+
+  // City endpoints (not deeply used, reserved for future growth)
+  rpc CreateCity(CreateCityRequest) returns (City);
+  rpc GetCity(GetCityRequest) returns (City);
+}
+
+message Country {
+  string code = 1;
+  string name = 2;
+  string status = 3;
+  string continent = 4;
+}
+
+message City {
+  string id = 1;
+  string name = 2;
+  string country_code = 3;
+  int32 population = 4;
+}
+
+message CountryEnvelope {
+  Country country = 1;
+}
+
+message RequestMeta {
+  string request_id = 1;
+}
+
+message CreateCountryRequest {
+  string code = 1;
+  string name = 2;
+  string continent = 3;
+}
+
+message GetCountryRequest {
+  string code = 1;
+}
+
+message ListCountriesRequest {}
+
+message ListCountriesResponse {
+  repeated Country countries = 1;
+}
+
+message UpdateCountryRequest {
+  string code = 1;
+  string name = 2;
+  string status = 3;
+  string continent = 4;
+}
+
+message DeleteCountryRequest {
+  string code = 1;
+}
+
+message DeleteCountryResponse {}
+
+message CreateCountryWithSourceRequest {
+  RequestMeta meta = 1;
+  Country country = 2;
+}
+
+message CreateCityRequest {
+  string country_code = 1;
+  City city = 2;
+}
+
+message GetCityRequest {
+  string country_code = 1;
+  string id = 2;
+}
