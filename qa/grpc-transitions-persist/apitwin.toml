@@ -1,0 +1,312 @@
+# QA harness: gRPC transitions + persistence
+#
+# Transition timeline for country lifecycle:
+#   t = 0s  → "provisioning"  (2 second duration)
+#   t = 2s+ → "ready"          (terminal)
+
+########################################
+# Scenarios 01-04, 09, 10, 11: baseline
+########################################
+
+# CreateCountry — append, schedules background "ready" transition
+[[grpc_routes]]
+match = "/geography.GeographyService/CreateCountry"
+fallback = "created"
+
+  [[grpc_routes.transitions]]
+  case     = "provisioning"
+  duration = 2
+
+  [[grpc_routes.transitions]]
+  case = "ready"
+
+  [grpc_routes.cases.created]
+  status   = 0
+  file     = "stubs/countries/"
+  persist  = true
+  merge    = "append"
+  key      = "code"
+  defaults = "defaults/country-provisioning.json"
+
+  [grpc_routes.cases.provisioning]
+  status   = 0
+  file     = "stubs/countries/{body.code}.json"
+  persist  = true
+  merge    = "update"
+  defaults = "defaults/country-provisioning.json"
+
+  [grpc_routes.cases.ready]
+  status   = 0
+  file     = "stubs/countries/{body.code}.json"
+  persist  = true
+  merge    = "update"
+  defaults = "defaults/country-ready.json"
+
+# GetCountry
+[[grpc_routes]]
+match = "/geography.GeographyService/GetCountry"
+fallback = "found"
+
+  [grpc_routes.cases.found]
+  file = "stubs/countries/{body.code}.json"
+
+# ListCountries
+[[grpc_routes]]
+match = "/geography.GeographyService/ListCountries"
+fallback = "listed"
+
+  [grpc_routes.cases.listed]
+  file = "stubs/countries/"
+
+# UpdateCountry
+[[grpc_routes]]
+match = "/geography.GeographyService/UpdateCountry"
+fallback = "updated"
+
+  [grpc_routes.cases.updated]
+  status  = 0
+  file    = "stubs/countries/{body.code}.json"
+  persist = true
+  merge   = "update"
+
+# DeleteCountry
+[[grpc_routes]]
+match = "/geography.GeographyService/DeleteCountry"
+fallback = "deleted"
+
+  [grpc_routes.cases.deleted]
+  status  = 0
+  file    = "stubs/countries/{body.code}.json"
+  persist = true
+  merge   = "delete"
+
+########################################
+# Scenario 05: source field (nested body)
+########################################
+
+[[grpc_routes]]
+match = "/geography.GeographyService/CreateCountryWithSource"
+fallback = "created"
+
+  [[grpc_routes.transitions]]
+  case     = "provisioning"
+  duration = 2
+
+  [[grpc_routes.transitions]]
+  case = "ready"
+
+  [grpc_routes.cases.created]
+  status   = 0
+  file     = "stubs/countries_src/"
+  persist  = true
+  merge    = "append"
+  key      = "code"
+  source   = "country"
+  wrap     = "country"
+  defaults = "defaults/country-provisioning.json"
+
+  [grpc_routes.cases.provisioning]
+  status   = 0
+  file     = "stubs/countries_src/{body.country.code}.json"
+  persist  = true
+  merge    = "update"
+  defaults = "defaults/country-provisioning.json"
+
+  [grpc_routes.cases.ready]
+  status   = 0
+  file     = "stubs/countries_src/{body.country.code}.json"
+  persist  = true
+  merge    = "update"
+  defaults = "defaults/country-ready.json"
+
+[[grpc_routes]]
+match = "/geography.GeographyService/GetCountryWithSource"
+fallback = "found"
+
+  [grpc_routes.cases.found]
+  file = "stubs/countries_src/{body.code}.json"
+  wrap = "country"
+
+########################################
+# Scenario 06: wrap
+########################################
+
+[[grpc_routes]]
+match = "/geography.GeographyService/CreateCountryWrapped"
+fallback = "created"
+
+  [[grpc_routes.transitions]]
+  case     = "provisioning"
+  duration = 2
+
+  [[grpc_routes.transitions]]
+  case = "ready"
+
+  [grpc_routes.cases.created]
+  status   = 0
+  file     = "stubs/countries_wrap/"
+  persist  = true
+  merge    = "append"
+  key      = "code"
+  wrap     = "country"
+  defaults = "defaults/country-provisioning.json"
+
+  [grpc_routes.cases.provisioning]
+  status   = 0
+  file     = "stubs/countries_wrap/{body.code}.json"
+  persist  = true
+  merge    = "update"
+  wrap     = "country"
+  defaults = "defaults/country-provisioning.json"
+
+  [grpc_routes.cases.ready]
+  status   = 0
+  file     = "stubs/countries_wrap/{body.code}.json"
+  persist  = true
+  merge    = "update"
+  wrap     = "country"
+  defaults = "defaults/country-ready.json"
+
+[[grpc_routes]]
+match = "/geography.GeographyService/GetCountryWrapped"
+fallback = "found"
+
+  [grpc_routes.cases.found]
+  file = "stubs/countries_wrap/{body.code}.json"
+  wrap = "country"
+
+########################################
+# Scenario 07: transition case with missing defaults
+########################################
+
+[[grpc_routes]]
+match = "/geography.GeographyService/CreateCountryMissingDefaults"
+fallback = "created"
+
+  [[grpc_routes.transitions]]
+  case     = "provisioning"
+  duration = 2
+
+  [[grpc_routes.transitions]]
+  case = "ready"
+
+  [grpc_routes.cases.created]
+  status   = 0
+  file     = "stubs/countries_nodefault/"
+  persist  = true
+  merge    = "append"
+  key      = "code"
+  defaults = "defaults/country-provisioning.json"
+
+  [grpc_routes.cases.provisioning]
+  status  = 0
+  file    = "stubs/countries_nodefault/{body.code}.json"
+  persist = true
+  merge   = "update"
+
+  # ready case — persist+update but NO defaults file
+  [grpc_routes.cases.ready]
+  status  = 0
+  file    = "stubs/countries_nodefault/{body.code}.json"
+  persist = true
+  merge   = "update"
+
+[[grpc_routes]]
+match = "/geography.GeographyService/GetCountryMissingDefaults"
+fallback = "found"
+
+  [grpc_routes.cases.found]
+  file = "stubs/countries_nodefault/{body.code}.json"
+
+########################################
+# Scenario 08: transition case name == fallback name
+########################################
+
+[[grpc_routes]]
+match = "/geography.GeographyService/CreateCountryFallbackTrap"
+fallback = "ready"
+
+  [[grpc_routes.transitions]]
+  case     = "provisioning"
+  duration = 2
+
+  [[grpc_routes.transitions]]
+  case = "ready"
+
+  # fallback/create case is named "ready" (the append case)
+  [grpc_routes.cases.ready]
+  status   = 0
+  file     = "stubs/countries_trap/"
+  persist  = true
+  merge    = "append"
+  key      = "code"
+  defaults = "defaults/country-ready.json"
+
+  [grpc_routes.cases.provisioning]
+  status   = 0
+  file     = "stubs/countries_trap/{body.code}.json"
+  persist  = true
+  merge    = "update"
+  defaults = "defaults/country-provisioning.json"
+
+[[grpc_routes]]
+match = "/geography.GeographyService/GetCountryFallbackTrap"
+fallback = "found"
+
+  [grpc_routes.cases.found]
+  file = "stubs/countries_trap/{body.code}.json"
+
+########################################
+# Scenario 12: conditions + transitions
+########################################
+
+[[grpc_routes]]
+match = "/geography.GeographyService/CreateCountryConditioned"
+fallback = "created"
+
+  [[grpc_routes.conditions]]
+  source = "body"
+  field  = "code"
+  op     = "eq"
+  value  = "XX"
+  case   = "invalid"
+
+  [[grpc_routes.transitions]]
+  case     = "provisioning"
+  duration = 2
+
+  [[grpc_routes.transitions]]
+  case = "ready"
+
+  [grpc_routes.cases.invalid]
+  status = 3  # INVALID_ARGUMENT
+  json   = '{"code":"","name":"","status":"rejected","continent":""}'
+
+  [grpc_routes.cases.created]
+  status   = 0
+  file     = "stubs/countries_cond/"
+  persist  = true
+  merge    = "append"
+  key      = "code"
+  defaults = "defaults/country-provisioning.json"
+
+  [grpc_routes.cases.provisioning]
+  status   = 0
+  file     = "stubs/countries_cond/{body.code}.json"
+  persist  = true
+  merge    = "update"
+  defaults = "defaults/country-provisioning.json"
+
+  [grpc_routes.cases.ready]
+  status   = 0
+  file     = "stubs/countries_cond/{body.code}.json"
+  persist  = true
+  merge    = "update"
+  defaults = "defaults/country-ready.json"
+
+[[grpc_routes]]
+match = "/geography.GeographyService/GetCountryConditioned"
+fallback = "found"
+
+  [grpc_routes.cases.found]
+  file = "stubs/countries_cond/{body.code}.json"
