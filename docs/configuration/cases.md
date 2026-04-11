@@ -160,7 +160,7 @@ source = "terrain.summit"    # extracts body.terrain.summit
 
 For gRPC routes, when `source` is omitted apitwin auto-derives the wrapper field from the proto descriptor if the request follows the Google `Update<X>Request { X x = N }` convention (input has a non-repeated field whose message type equals the response output type). This makes `merge = "update"` cases persist cleanly without an explicit `source` for Google-style protos. Explicit `source` always wins. See [gRPC persistence — auto-derived source](../grpc/persistence.md#auto-derived-source-google-api-convention).
 
-See [`examples/grpc-source-persist/`](../../examples/grpc-source-persist/) for a complete working example.
+See [`examples/grpc-source-persist/`](https://github.com/ridakaddir/apitwin/tree/main/examples/grpc-source-persist/) for a complete working example.
 
 ### Defaults
 

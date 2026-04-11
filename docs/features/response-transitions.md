@@ -260,7 +260,7 @@ t = 25s   POST /cities (body: {name: "Casablanca"})  → 201 (created fresh)
 
 ## Examples
 
-See [`examples/transitions/`](../../examples/transitions/) for complete working examples:
+See [`examples/transitions/`](https://github.com/ridakaddir/apitwin/tree/main/examples/transitions/) for complete working examples:
 
 - **`visa-status.toml`** — request-time transitions (GET returns different responses over time)
 - **`city-verification.toml`** — background transitions (POST creates resource, file mutates on disk after delay)
