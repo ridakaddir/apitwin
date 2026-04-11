@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package geo;
+option go_package = "github.com/ridakaddir/apitwin/qa/geo";
+
+// Reproduces the response-wrapped RPC shape that triggers the auto-derive
+// source+wrap miss reported against UpdateGateway. The three RPCs below
+// differ only in the shape of their Request/Response to isolate which shape
+// the auto-derive path handles correctly.
+//
+// Domain: continent/country/city — matches the house style of the existing
+// QA and unit tests.
+service CityService {
+  // Shape A — "direct entity" response. Request wraps the entity under a
+  // uniquely typed field; response IS the entity. This matches the working
+  // UpdateDatabaseInstance pattern and must keep working as a regression
+  // guard.
+  rpc PatchCity (PatchCityRequest) returns (City);
+
+  // Shape B — "response-wrapped". Response is a wrapper message
+  // UpdateCityResponse { City city = 1; }. Request has a non-entity sibling
+  // (CityParent), a scalar with a camelCase prefix that overlaps the entity
+  // field name (`city_name` → `cityName`), and the entity itself. This is
+  // the shape the user reported as broken on UpdateGateway.
+  rpc UpdateCity (UpdateCityRequest) returns (UpdateCityResponse);
+
+  // GetCity is only used by tests to read the stub back through the proto
+  // schema. It returns the response-wrapped shape so encoding failures on
+  // the persisted file surface here the same way they did in production.
+  rpc GetCity (GetCityRequest) returns (UpdateCityResponse);
+}
+
+message City {
+  string name       = 1;
+  string country    = 2;
+  int64  population = 3;
+  string status     = 4;
+  repeated string languages = 5;
+}
+
+// Non-entity message sibling — distinguishes the request's "parent" metadata
+// from the entity and must NOT be picked up by auto-derive.
+message CityParent {
+  string continent = 1;
+  string country   = 2;
+}
+
+message PatchCityRequest {
+  CityParent parent = 1;
+  string     id     = 2;  // routing
+  City       city   = 3;
+}
+
+message UpdateCityRequest {
+  CityParent parent    = 1;
+  // Prefix-collision fixture: camelCase is `cityName`, which starts with the
+  // same characters as the entity field `city`. Auto-derive must still
+  // ignore this scalar because it has no message type.
+  string     city_name = 2;
+  City       city      = 3;
+}
+
+message UpdateCityResponse {
+  City city = 1;
+}
+
+message GetCityRequest {
+  string name = 1;
+}

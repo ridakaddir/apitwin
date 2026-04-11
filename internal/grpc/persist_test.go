@@ -40,6 +40,21 @@ func loadDatabaseTestRegistry(t *testing.T) *Registry {
 	return reg
 }
 
+// loadGeoTestRegistry parses the testdata geo.proto and returns a Registry.
+// Used by RequestEntity tests that exercise the response-wrapped RPC shape
+// reported against UpdateGateway (see Registry.RequestEntity doc comment).
+func loadGeoTestRegistry(t *testing.T) *Registry {
+	t.Helper()
+	reg, err := NewRegistry(
+		[]string{"geo.proto"},
+		[]string{"testdata"},
+	)
+	if err != nil {
+		t.Fatalf("NewRegistry: %v", err)
+	}
+	return reg
+}
+
 // -----------------------------------------------------------------------
 // EntityFieldNames
 // -----------------------------------------------------------------------
@@ -589,5 +604,296 @@ func TestApplyGRPCPersist_ExplicitSourceTakesPrecedence(t *testing.T) {
 	}
 	if _, has := stub["databaseInstance"]; has {
 		t.Errorf("wrapper key leaked even with explicit source: %v", stub)
+	}
+}
+
+// -----------------------------------------------------------------------
+// RequestEntity — two-shape auto-derive (direct + response-wrapped)
+// -----------------------------------------------------------------------
+
+// TestRequestEntity_DirectEntityResponse covers shape 1: response IS the
+// entity. PatchCity returns City directly, so the auto-derive picks the
+// request's `city` field and leaves wrap empty (no wrapping needed to
+// encode a City).
+func TestRequestEntity_DirectEntityResponse(t *testing.T) {
+	reg := loadGeoTestRegistry(t)
+	md, err := reg.FindMethod("/geo.v1.CityService/PatchCity")
+	if err != nil || md == nil {
+		t.Fatalf("FindMethod PatchCity: md=%v err=%v", md, err)
+	}
+	src, wrap, amb := reg.RequestEntity(md)
+	if amb {
+		t.Error("expected ambiguous=false")
+	}
+	if src != "city" {
+		t.Errorf("source = %q, want %q", src, "city")
+	}
+	if wrap != "" {
+		t.Errorf("wrap = %q, want empty (response IS the entity)", wrap)
+	}
+}
+
+// TestRequestEntity_ResponseWrapped covers shape 2: UpdateCity returns
+// UpdateCityResponse, which wraps a single City field. Auto-derive must
+// unwrap the response to City, find the request's `city` field, and
+// report both source="city" and wrap="city".
+//
+// This is the exact shape that produced the reported UpdateGateway
+// corruption on beta.12.
+func TestRequestEntity_ResponseWrapped(t *testing.T) {
+	reg := loadGeoTestRegistry(t)
+	md, err := reg.FindMethod("/geo.v1.CityService/UpdateCity")
+	if err != nil || md == nil {
+		t.Fatalf("FindMethod UpdateCity: md=%v err=%v", md, err)
+	}
+	src, wrap, amb := reg.RequestEntity(md)
+	if amb {
+		t.Error("expected ambiguous=false on clean wrapper shape")
+	}
+	if src != "city" {
+		t.Errorf("source = %q, want %q (city field on UpdateCityRequest)", src, "city")
+	}
+	if wrap != "city" {
+		t.Errorf("wrap = %q, want %q (city field on UpdateCityResponse)", wrap, "city")
+	}
+}
+
+// TestRequestEntity_ResponseWrappedAmbiguous covers shape 2 ambiguity:
+// MergeCity's request has two non-repeated City fields, so auto-derive
+// must bail out and signal ambiguity instead of guessing.
+func TestRequestEntity_ResponseWrappedAmbiguous(t *testing.T) {
+	reg := loadGeoTestRegistry(t)
+	md, err := reg.FindMethod("/geo.v1.CityService/MergeCity")
+	if err != nil || md == nil {
+		t.Fatalf("FindMethod MergeCity: md=%v err=%v", md, err)
+	}
+	src, wrap, amb := reg.RequestEntity(md)
+	if !amb {
+		t.Error("expected ambiguous=true when request has two City fields")
+	}
+	if src != "" || wrap != "" {
+		t.Errorf("RequestEntity = (%q, %q), want (\"\", \"\") on ambiguous match", src, wrap)
+	}
+}
+
+// TestRequestEntity_ScalarPrefixDoesNotMatch pins the regression guard
+// the user asked for: a scalar field whose camelCase name shares a prefix
+// with the entity field (here `city_name` → `cityName` alongside the
+// entity field `city`) must NOT cause auto-derive to mis-fire on the
+// response-wrapped shape. Scalars are filtered out by type before the
+// name is ever consulted.
+func TestRequestEntity_ScalarPrefixDoesNotMatch(t *testing.T) {
+	reg := loadGeoTestRegistry(t)
+	md, _ := reg.FindMethod("/geo.v1.CityService/UpdateCity")
+	// UpdateCityRequest has: parent (CityParent), city_name (string),
+	// city (City). The scalar city_name must be invisible to auto-derive
+	// — source/wrap must still resolve to ("city", "city", false) cleanly.
+	src, wrap, amb := reg.RequestEntity(md)
+	if amb || src != "city" || wrap != "city" {
+		t.Errorf("scalar prefix collision broke auto-derive: got (%q, %q, %v)", src, wrap, amb)
+	}
+}
+
+// TestRequestEntityField_BackwardsCompatShim verifies the legacy
+// RequestEntityField wrapper still returns (source, ambiguous) for the
+// shape-1 case without leaking the new wrap return value. Existing
+// callers of RequestEntityField must keep compiling.
+func TestRequestEntityField_BackwardsCompatShim(t *testing.T) {
+	reg := loadDatabaseTestRegistry(t)
+	md, _ := reg.FindMethod("/database.v1.DatabaseService/UpdateDatabaseInstance")
+	src, amb := reg.RequestEntityField(md)
+	if amb {
+		t.Error("expected ambiguous=false")
+	}
+	if src != "databaseInstance" {
+		t.Errorf("RequestEntityField = %q, want %q", src, "databaseInstance")
+	}
+}
+
+// -----------------------------------------------------------------------
+// applyGRPCPersist — auto-derive of source AND wrap on response-wrapped shape
+// -----------------------------------------------------------------------
+
+// TestApplyGRPCPersist_AutoDerivesSourceAndWrapOnResponseWrapper is the
+// end-to-end regression test for the UpdateGateway bug. The case has NO
+// explicit source or wrap (matching the user's `ready` transition case),
+// and the proto uses the response-wrapped shape
+// (UpdateCityResponse { City city = 1; }).
+//
+// Before the fix: auto-derive returned "" because no request field had
+// type UpdateCityResponse, so the full request envelope (parent, cityName,
+// nested city) was merged into the flat existing stub, then returned
+// unwrapped from applyGRPCPersist, which would later fail EncodeResponse
+// with "message type UpdateCityResponse has no known field named country".
+//
+// After the fix: RequestEntity unwraps UpdateCityResponse → City, matches
+// the request's `city` field, infers both source="city" and wrap="city",
+// producing a clean merge and a wrapped response.
+func TestApplyGRPCPersist_AutoDerivesSourceAndWrapOnResponseWrapper(t *testing.T) {
+	dir := t.TempDir()
+	stubFile := filepath.Join(dir, "stubs", "cities", "marrakech.json")
+	if err := os.MkdirAll(filepath.Dir(stubFile), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	initial, _ := json.Marshal(map[string]interface{}{
+		"name":       "marrakech",
+		"country":    "MA",
+		"population": float64(928850),
+		"status":     "ready",
+	})
+	if err := os.WriteFile(stubFile, initial, 0644); err != nil {
+		t.Fatalf("write stub: %v", err)
+	}
+
+	reg := loadGeoTestRegistry(t)
+	md, _ := reg.FindMethod("/geo.v1.CityService/UpdateCity")
+	if md == nil {
+		t.Fatal("UpdateCity not found in geo test registry")
+	}
+
+	h := &handler{
+		loader:      &stubLoader{cfg: &config.Config{}, configDir: dir},
+		transitions: newGRPCTransitionState(),
+		registry:    reg,
+	}
+
+	// No explicit source / wrap — mirrors the user's `ready` case.
+	c := config.Case{
+		Status:  0,
+		File:    "stubs/cities/{body.city.name}.json",
+		Persist: true,
+		Merge:   "update",
+	}
+
+	reqMap := map[string]interface{}{
+		"parent": map[string]interface{}{
+			"continent": "africa",
+			"country":   "MA",
+		},
+		"cityName": "marrakech", // prefix-colliding scalar; must not leak
+		"city": map[string]interface{}{
+			"name":       "marrakech",
+			"population": float64(950000),
+		},
+	}
+
+	code, handled, result, persistedPath := h.applyGRPCPersist(
+		c, reqMap, time.Now(),
+		"/geo.v1.CityService/UpdateCity", md,
+	)
+	if !handled {
+		t.Fatal("expected handled=true")
+	}
+	if code != codes.OK {
+		t.Fatalf("expected OK, got %v", code)
+	}
+	if persistedPath != stubFile {
+		t.Errorf("persistedPath=%q, want %q", persistedPath, stubFile)
+	}
+
+	// Response must be wrapped under "city" so EncodeResponse can round-trip
+	// it as UpdateCityResponse. This is the bit the caller-side encode
+	// failure hinged on.
+	inner, ok := result["city"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected result wrapped as {city: ...}, got %v", result)
+	}
+	if inner["population"] != float64(950000) {
+		t.Errorf("wrapped response population = %v, want 950000", inner["population"])
+	}
+
+	stub := readStub(t, stubFile)
+
+	// Corruption guard: none of the request envelope keys may appear in
+	// the persisted file.
+	for _, key := range []string{"parent", "cityName", "city"} {
+		if _, has := stub[key]; has {
+			t.Errorf("BUG REGRESSION: stub contains leaked key %q: %v", key, stub)
+		}
+	}
+
+	// Population updated, country/status preserved from seed.
+	if stub["population"] != float64(950000) {
+		t.Errorf("population not updated: got %v", stub["population"])
+	}
+	if stub["country"] != "MA" {
+		t.Errorf("country dropped: got %v", stub["country"])
+	}
+	if stub["status"] != "ready" {
+		t.Errorf("status dropped: got %v", stub["status"])
+	}
+}
+
+// TestApplyGRPCPersist_ExplicitSourceShortCircuitsAutoDerive pins the
+// contract the user asked for in the bug report: when `source` is set
+// explicitly, auto-derive is never consulted. We use the ambiguous
+// MergeCity proto here — if auto-derive were called it would warn
+// (ambiguous=true) and leave source empty; with explicit source="left"
+// the explicit value must win regardless.
+func TestApplyGRPCPersist_ExplicitSourceShortCircuitsAutoDerive(t *testing.T) {
+	dir := t.TempDir()
+	stubFile := filepath.Join(dir, "stubs", "cities", "casablanca.json")
+	if err := os.MkdirAll(filepath.Dir(stubFile), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	initial, _ := json.Marshal(map[string]interface{}{
+		"name":       "casablanca",
+		"country":    "MA",
+		"population": float64(3360000),
+	})
+	if err := os.WriteFile(stubFile, initial, 0644); err != nil {
+		t.Fatalf("write stub: %v", err)
+	}
+
+	reg := loadGeoTestRegistry(t)
+	md, _ := reg.FindMethod("/geo.v1.CityService/MergeCity")
+
+	h := &handler{
+		loader:      &stubLoader{cfg: &config.Config{}, configDir: dir},
+		transitions: newGRPCTransitionState(),
+		registry:    reg,
+	}
+
+	c := config.Case{
+		Status:  0,
+		File:    "stubs/cities/{body.left.name}.json",
+		Persist: true,
+		Merge:   "update",
+		Source:  "left", // explicit — auto-derive would have said ambiguous
+		Wrap:    "city", // explicit — matches MergeCity's UpdateCityResponse wrapper
+	}
+
+	reqMap := map[string]interface{}{
+		"left": map[string]interface{}{
+			"name":       "casablanca",
+			"population": float64(3400000),
+		},
+		"right": map[string]interface{}{
+			"name": "casablanca",
+		},
+	}
+
+	code, handled, result, _ := h.applyGRPCPersist(
+		c, reqMap, time.Now(),
+		"/geo.v1.CityService/MergeCity", md,
+	)
+	if !handled || code != codes.OK {
+		t.Fatalf("expected handled=true, OK; got handled=%v, code=%v", handled, code)
+	}
+
+	// Response wrapped under explicit wrap="city".
+	if _, ok := result["city"]; !ok {
+		t.Errorf("expected result wrapped as {city: ...}, got %v", result)
+	}
+
+	stub := readStub(t, stubFile)
+	if stub["population"] != float64(3400000) {
+		t.Errorf("explicit source=left did not extract: population=%v", stub["population"])
+	}
+	if _, has := stub["right"]; has {
+		t.Errorf("right leaked even with explicit source=left: %v", stub)
+	}
+	if _, has := stub["left"]; has {
+		t.Errorf("left wrapper leaked: %v", stub)
 	}
 }

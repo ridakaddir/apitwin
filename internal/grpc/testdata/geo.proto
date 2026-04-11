@@ -1,0 +1,61 @@
+syntax = "proto3";
+package geo.v1;
+option go_package = "github.com/example/geo/v1";
+
+// Test fixture for the response-wrapped RPC shape that triggers the
+// UpdateGateway bug. The response (UpdateCityResponse) wraps a single
+// City field; the request contains a non-entity CityParent sibling, a
+// prefix-colliding scalar (city_name → cityName), and the City itself.
+// Used by persist_test.go to pin Registry.RequestEntity on both shapes:
+//
+//  - PatchCity:  direct-entity response (regression guard for the Google
+//                UpdateDatabaseInstance shape).
+//  - UpdateCity: response-wrapped (the shape that corrupted the gateway
+//                stub on beta.12).
+//  - MergeCity:  response-wrapped with TWO request fields of the entity
+//                type — ambiguity guard.
+
+service CityService {
+  rpc PatchCity  (PatchCityRequest)  returns (City);
+  rpc UpdateCity (UpdateCityRequest) returns (UpdateCityResponse);
+  rpc MergeCity  (MergeCityRequest)  returns (UpdateCityResponse);
+}
+
+message City {
+  string name       = 1;
+  string country    = 2;
+  int64  population = 3;
+  string status     = 4;
+}
+
+message CityParent {
+  string continent = 1;
+  string country   = 2;
+}
+
+message PatchCityRequest {
+  CityParent parent = 1;
+  string     id     = 2;
+  City       city   = 3;
+}
+
+message UpdateCityRequest {
+  CityParent parent    = 1;
+  // Prefix-collision fixture: camelCase is "cityName", which shares the
+  // "city" prefix with the entity field below. Auto-derive must ignore
+  // scalars regardless of name, so this must not be picked up and must
+  // not trip ambiguity detection.
+  string     city_name = 2;
+  City       city      = 3;
+}
+
+message UpdateCityResponse {
+  City city = 1;
+}
+
+// Ambiguous: two non-repeated City fields inside the request, so
+// auto-derive on the response-wrapped shape must return ambiguous.
+message MergeCityRequest {
+  City left  = 1;
+  City right = 2;
+}
