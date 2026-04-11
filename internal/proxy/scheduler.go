@@ -9,6 +9,7 @@ import (
 	"github.com/ridakaddir/apitwin/internal/config"
 	"github.com/ridakaddir/apitwin/internal/logger"
 	"github.com/ridakaddir/apitwin/internal/persist"
+	"github.com/ridakaddir/apitwin/internal/transitions"
 )
 
 // transitionScheduler manages background goroutines that apply deferred file
@@ -21,28 +22,18 @@ import (
 // This allows resources to "transition" on disk (e.g. Deploying → Ready)
 // without requiring a subsequent GET request to trigger the state change.
 //
-// Concurrency: each call to Reset or Stop swaps in a new "generation" (context
-// + WaitGroup pair) so that in-flight Schedule/schedule calls from concurrent
-// HTTP requests never call wg.Add on a WaitGroup that is being waited on.
+// Concurrency: each call to Reset or Stop swaps in a new transitions.Generation
+// so that in-flight Schedule/schedule calls from concurrent HTTP requests
+// never call WG.Add on a WaitGroup that is being waited on.
 type transitionScheduler struct {
 	mu  sync.Mutex
-	gen *schedulerGeneration
-}
-
-// schedulerGeneration groups the context and WaitGroup for one lifecycle
-// between resets. Reset swaps in a fresh generation, waits on the old one,
-// and new goroutines attach to the new generation.
-type schedulerGeneration struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
+	gen *transitions.Generation
 }
 
 // newTransitionScheduler creates a scheduler with a cancellable context.
 func newTransitionScheduler(parent context.Context) *transitionScheduler {
-	ctx, cancel := context.WithCancel(parent)
 	return &transitionScheduler{
-		gen: &schedulerGeneration{ctx: ctx, cancel: cancel},
+		gen: transitions.NewGeneration(parent),
 	}
 }
 
@@ -112,11 +103,15 @@ func (s *transitionScheduler) Schedule(route *config.Route, filePath, configDir 
 func (s *transitionScheduler) schedule(delay time.Duration, filePath string, c config.Case, configDir string, refCtx *RefContext) {
 	s.mu.Lock()
 	gen := s.gen
-	gen.wg.Add(1)
+	if gen.Ctx.Err() != nil {
+		s.mu.Unlock()
+		return
+	}
+	gen.WG.Add(1)
 	s.mu.Unlock()
 
 	go func() {
-		defer gen.wg.Done()
+		defer gen.WG.Done()
 
 		timer := time.NewTimer(delay)
 		defer timer.Stop()
@@ -149,7 +144,7 @@ func (s *transitionScheduler) schedule(delay time.Duration, filePath string, c c
 			logger.Info("deferred transition applied",
 				"file", filePath, "defaults", c.Defaults, "delay", delay.String())
 
-		case <-gen.ctx.Done():
+		case <-gen.Ctx.Done():
 			// Cancelled (hot-reload or shutdown).
 			return
 		}
@@ -163,27 +158,24 @@ func (s *transitionScheduler) schedule(delay time.Duration, filePath string, c c
 // New Schedule/schedule calls that arrive concurrently will attach to the
 // new generation, avoiding the sync.WaitGroup Add/Wait race.
 func (s *transitionScheduler) Reset(parent context.Context) {
-	ctx, cancel := context.WithCancel(parent)
-	newGen := &schedulerGeneration{ctx: ctx, cancel: cancel}
+	newGen := transitions.NewGeneration(parent)
 
 	s.mu.Lock()
 	oldGen := s.gen
-	oldGen.cancel()
 	s.gen = newGen
 	s.mu.Unlock()
 
-	// Wait for old-generation goroutines outside the lock. New requests
-	// that call Schedule concurrently will use newGen, so there is no
-	// Add/Wait race on oldGen's WaitGroup.
-	oldGen.wg.Wait()
+	// Cancel + drain the old generation outside the lock. New requests that
+	// call Schedule concurrently will use newGen, so there is no Add/Wait
+	// race on oldGen's WaitGroup.
+	oldGen.Stop()
 }
 
 // Stop cancels all pending mutations and waits for goroutines to finish.
 // Called on server shutdown.
 func (s *transitionScheduler) Stop() {
 	s.mu.Lock()
-	s.gen.cancel()
 	gen := s.gen
 	s.mu.Unlock()
-	gen.wg.Wait()
+	gen.Stop()
 }

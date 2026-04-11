@@ -295,7 +295,7 @@ func (h *handler) resolveCase(route *config.GRPCRoute, reqMap map[string]interfa
 	// routes with deferred mutations) may have transition case names that don't
 	// correspond to request-time cases.
 	if len(route.Transitions) > 0 {
-		if caseName := h.transitions.resolve(route); caseName != "" {
+		if caseName := h.transitions.Resolve(route); caseName != "" {
 			if _, ok := route.Cases[caseName]; ok {
 				return caseName
 			}

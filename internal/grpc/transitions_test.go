@@ -16,9 +16,9 @@ func grpcResolveAt(transitions []config.Transition, elapsed int) string {
 	}
 
 	ts := newGRPCTransitionState()
-	ts.firstHit[route.Match] = time.Now().Add(-time.Duration(elapsed) * time.Second)
+	ts.FirstHit[route.Match] = time.Now().Add(-time.Duration(elapsed) * time.Second)
 
-	return ts.resolve(route)
+	return ts.Resolve(route)
 }
 
 func TestGRPCResolve_EmptyTransitions(t *testing.T) {
@@ -26,7 +26,7 @@ func TestGRPCResolve_EmptyTransitions(t *testing.T) {
 		Match: "/test.Service/Method",
 	}
 	ts := newGRPCTransitionState()
-	got := ts.resolve(route)
+	got := ts.Resolve(route)
 	if got != "" {
 		t.Errorf("resolve with no transitions = %q, want empty string", got)
 	}
@@ -141,20 +141,16 @@ func TestGRPCReset_ClearsFirstHit(t *testing.T) {
 	}
 
 	ts := newGRPCTransitionState()
-	ts.resolve(route)
+	ts.Resolve(route)
 
-	ts.mu.Lock()
-	_, exists := ts.firstHit[route.Match]
-	ts.mu.Unlock()
+	_, exists := ts.FirstHit[route.Match]
 	if !exists {
 		t.Fatal("expected firstHit entry before reset")
 	}
 
 	ts.Reset()
 
-	ts.mu.Lock()
-	_, exists = ts.firstHit[route.Match]
-	ts.mu.Unlock()
+	_, exists = ts.FirstHit[route.Match]
 	if exists {
 		t.Error("firstHit entry should be cleared after reset")
 	}
