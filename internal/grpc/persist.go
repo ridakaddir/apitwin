@@ -123,7 +123,7 @@ func (h *handler) applyGRPCPersist(
 		return codes.OK, true, updated, filePath
 
 	case "append":
-		if !isGRPCDirectoryPath(filePath, c.File) {
+		if !persist.IsDirectoryPath(filePath, c.File) {
 			logger.Error("grpc persist append", "file", filePath, "err", "append requires directory path")
 			logger.LogGRPC(fullMethod, codes.InvalidArgument, time.Since(start), logger.SourceStub)
 			return codes.InvalidArgument, true, nil, ""
@@ -191,7 +191,7 @@ func stripPathPlaceholderFields(filePattern string, reqMap map[string]interface{
 	for _, m := range matches {
 		field := m[1]
 		exclude[field] = true
-		exclude[snakeToCamel(field)] = true
+		exclude[persist.SnakeToCamel(field)] = true
 	}
 
 	filtered := make(map[string]interface{}, len(reqMap))
@@ -201,19 +201,6 @@ func stripPathPlaceholderFields(filePattern string, reqMap map[string]interface{
 		}
 	}
 	return filtered
-}
-
-// isGRPCDirectoryPath determines if a file path should be treated as a directory.
-func isGRPCDirectoryPath(resolvedPath, originalConfigFile string) bool {
-	info, err := os.Stat(resolvedPath)
-	if err == nil && info.IsDir() {
-		return true
-	}
-	// If path doesn't exist but original config indicated directory intent
-	if os.IsNotExist(err) && strings.HasSuffix(originalConfigFile, "/") {
-		return true
-	}
-	return false
 }
 
 // loadGRPCDefaults reads a defaults JSON file, resolves template tokens ({{uuid}},
@@ -304,7 +291,7 @@ func walkNestedField(reqMap map[string]interface{}, dotPath string) (string, boo
 		}
 		v, exists := m[part]
 		if !exists {
-			v, exists = m[snakeToCamel(part)]
+			v, exists = m[persist.SnakeToCamel(part)]
 			if !exists {
 				return "", false
 			}

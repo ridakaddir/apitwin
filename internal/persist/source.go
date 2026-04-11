@@ -16,7 +16,7 @@ func ExtractSourceField(data map[string]interface{}, dotPath string) map[string]
 		}
 		v, exists := m[part]
 		if !exists {
-			v, exists = m[snakeToCamel(part)]
+			v, exists = m[SnakeToCamel(part)]
 			if !exists {
 				return nil
 			}
@@ -29,8 +29,9 @@ func ExtractSourceField(data map[string]interface{}, dotPath string) map[string]
 	return nil
 }
 
-// snakeToCamel converts a snake_case string to camelCase.
-func snakeToCamel(s string) string {
+// SnakeToCamel converts a snake_case string to camelCase.
+// Exported so both REST and gRPC transports can reuse a single implementation.
+func SnakeToCamel(s string) string {
 	parts := strings.Split(s, "_")
 	if len(parts) == 1 {
 		return s

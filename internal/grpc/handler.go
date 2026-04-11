@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jhump/protoreflect/desc" //nolint:staticcheck
+	"github.com/ridakaddir/apitwin/internal/conditions"
 	"github.com/ridakaddir/apitwin/internal/config"
 	"github.com/ridakaddir/apitwin/internal/logger"
 	"github.com/ridakaddir/apitwin/internal/persist"
@@ -401,29 +402,7 @@ func evalGRPCCondition(cond config.Condition, bodyBytes []byte) bool {
 		return false
 	}
 	val, found := extractGRPCBodyField(cond.Field, bodyBytes)
-
-	switch cond.Op {
-	case "exists":
-		return found
-	case "not_exists":
-		return !found
-	case "eq":
-		return found && val == cond.Value
-	case "neq":
-		return found && val != cond.Value
-	case "contains":
-		return found && strings.Contains(val, cond.Value)
-	case "regex":
-		if !found {
-			return false
-		}
-		re, err := regexp.Compile(cond.Value)
-		if err != nil {
-			return false
-		}
-		return re.MatchString(val)
-	}
-	return false
+	return conditions.EvalOp(cond.Op, val, cond.Value, found)
 }
 
 // extractGRPCBodyField walks dot-notation path in the protojson-decoded map.
@@ -449,23 +428,3 @@ func mapToJSONBytes(m map[string]interface{}) []byte {
 	return b
 }
 
-// snakeToCamel converts a snake_case field name to lowerCamelCase.
-// e.g. "payment_type" → "paymentType", "user_id" → "userId".
-func snakeToCamel(s string) string {
-	parts := strings.Split(s, "_")
-	if len(parts) == 1 {
-		return s
-	}
-	var b strings.Builder
-	for i, p := range parts {
-		if i == 0 {
-			b.WriteString(p)
-			continue
-		}
-		if len(p) > 0 {
-			b.WriteByte(p[0] - 32) // uppercase first letter
-			b.WriteString(p[1:])
-		}
-	}
-	return b.String()
-}

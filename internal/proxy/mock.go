@@ -8,13 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/ridakaddir/apitwin/internal/config"
 	"github.com/ridakaddir/apitwin/internal/logger"
 	"github.com/ridakaddir/apitwin/internal/persist"
+	mocktmpl "github.com/ridakaddir/apitwin/internal/template"
 )
 
 // serveMock writes a mock response for the given case to w.
@@ -47,7 +47,7 @@ func serveMock(w http.ResponseWriter, r *http.Request, c config.Case, bodyBytes 
 		}
 
 		// Check if this is a directory path (for aggregation)
-		if isDirectoryPath(filePath, c.File) {
+		if persist.IsDirectoryPath(filePath, c.File) {
 			body, err = persist.ReadDir(filePath)
 			if err != nil {
 				logger.Error("reading stub directory", "dir", filePath, "err", err)
@@ -133,32 +133,13 @@ func renderTemplate(s string) (string, error) {
 		return key
 	})
 
-	funcMap := template.FuncMap{
-		"uuid": func() string {
-			return uuid.New().String()
-		},
-		"now": func() string {
-			return time.Now().UTC().Format(time.RFC3339)
-		},
-		"timestamp": func() string {
-			return fmt.Sprintf("%d", time.Now().UnixMilli())
-		},
-	}
-
-	// Convert {{token}} to Go template syntax {{call token}}.
-	// Our tokens are zero-arg functions so we can call them directly.
-	tmpl, err := template.New("mock").Funcs(funcMap).Parse(preserved)
+	rendered, err := mocktmpl.RenderTokens(preserved)
 	if err != nil {
 		return s, err
 	}
 
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, nil); err != nil {
-		return s, err
-	}
-
 	// Restore the {{ref:...}} tokens.
-	result := buf.String()
+	result := rendered
 	for _, p := range placeholders {
 		result = strings.Replace(result, p.key, p.value, 1)
 	}

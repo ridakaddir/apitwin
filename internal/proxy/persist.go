@@ -100,7 +100,7 @@ func applyPersist(w http.ResponseWriter, r *http.Request, c config.Case, bodyByt
 		return true, filePath
 
 	case "append":
-		if !isDirectoryPath(filePath, c.File) {
+		if !persist.IsDirectoryPath(filePath, c.File) {
 			logger.Error("persist append", "file", filePath, "err", "append requires directory path")
 			writeJSON(w, http.StatusBadRequest, map[string]string{
 				"error": "merge=\"append\" requires file to point to a directory (path ending with /)",
@@ -300,22 +300,6 @@ func loadDefaultsStatic(defaults, configDir string, visited map[string]bool, ref
 
 	return base, nil
 }
-
-// isDirectoryPath determines if a file path should be treated as a directory
-// for stub aggregation. Returns true if the path is an existing directory OR
-// if the original config path ended with "/" (indicating directory intent).
-func isDirectoryPath(resolvedPath, originalConfigFile string) bool {
-	info, err := os.Stat(resolvedPath)
-	if err == nil && info.IsDir() {
-		return true
-	}
-	// If path doesn't exist but original config indicated directory intent
-	if os.IsNotExist(err) && strings.HasSuffix(originalConfigFile, "/") {
-		return true
-	}
-	return false
-}
-
 
 // extractQueryParams extracts query parameters from the request.
 func extractQueryParams(r *http.Request) map[string]string {
