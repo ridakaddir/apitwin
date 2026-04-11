@@ -1,21 +1,24 @@
 name: npm publish
 
 on:
+  # Automatically triggered when a version tag is pushed (matches release.yml).
+  # We trigger on the tag directly rather than on `release: published` because
+  # releases created by goreleaser using GITHUB_TOKEN do not cascade-trigger
+  # other workflows.
+  push:
+    tags:
+      - "v*"
+
+  # Manual escape hatch for re-running a publish against an existing tag.
+  # Must be dispatched against a `v*` tag ref — the version is always derived
+  # from the tag, never supplied by hand.
   workflow_dispatch:
     inputs:
-      version:
-        description: "Version to publish (e.g. 0.2.0)"
-        required: true
-        type: string
       dry-run:
         description: "Dry run (don't actually publish)"
         required: false
         type: boolean
         default: false
-
-  # Automatically triggered when a new GitHub release is published
-  release:
-    types: [published]
 
 # Prevent concurrent publishes from conflicting
 concurrency:
@@ -42,21 +45,27 @@ jobs:
 
       # Use env vars instead of direct interpolation to prevent script injection.
       # See: https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#understanding-the-risk-of-script-injections
-      - name: Determine version
+      - name: Determine version from tag
         id: version
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          TAG_NAME: ${{ github.event.release.tag_name }}
-          INPUT_VERSION: ${{ inputs.version }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          if [ "$EVENT_NAME" = "release" ]; then
-            # Strip the leading 'v' from the tag (v0.1.0 -> 0.1.0)
-            VERSION="${TAG_NAME#v}"
-          else
-            VERSION="$INPUT_VERSION"
+          if [ "$REF_TYPE" != "tag" ]; then
+            echo "::error::npm-publish must run against a tag ref, got ref_type=$REF_TYPE ref_name=$REF_NAME"
+            exit 1
           fi
+          case "$REF_NAME" in
+            v*) ;;
+            *)
+              echo "::error::tag must start with 'v', got $REF_NAME"
+              exit 1
+              ;;
+          esac
+          # Strip the leading 'v' from the tag (v0.1.0 -> 0.1.0)
+          VERSION="${REF_NAME#v}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Publishing version: $VERSION"
+          echo "Publishing version: $VERSION (from tag $REF_NAME)"
 
       - name: Determine dry-run flag
         id: flags
