@@ -897,3 +897,118 @@ func TestApplyGRPCPersist_ExplicitSourceShortCircuitsAutoDerive(t *testing.T) {
 		t.Errorf("left wrapper leaked: %v", stub)
 	}
 }
+
+// TestApplyGRPCPersist_ExplicitSourceInfersWrapFromResponse is the regression
+// test for the UpdateSummit bug: when the user sets an explicit `source` but
+// leaves `wrap` empty, the handler must still infer the wrap from the
+// response descriptor. Source extraction and response wrapping are
+// independent concerns — making source explicit should not silently disable
+// wrap inference.
+//
+// Before the fix: `if sourceField == ""` short-circuited the whole
+// auto-derive block, so wrap stayed empty. The persist result was returned
+// unwrapped and downstream EncodeResponse failed with
+// "message type UpdateCityResponse has no known field named country".
+//
+// After the fix: explicit source branches into a wrap-only inference via
+// Registry.ResponseWrap, which returns "city" for UpdateCity's
+// UpdateCityResponse wrapper.
+func TestApplyGRPCPersist_ExplicitSourceInfersWrapFromResponse(t *testing.T) {
+	dir := t.TempDir()
+	stubFile := filepath.Join(dir, "stubs", "cities", "marrakech.json")
+	if err := os.MkdirAll(filepath.Dir(stubFile), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	initial, _ := json.Marshal(map[string]interface{}{
+		"name":       "marrakech",
+		"country":    "MA",
+		"population": float64(928850),
+	})
+	if err := os.WriteFile(stubFile, initial, 0644); err != nil {
+		t.Fatalf("write stub: %v", err)
+	}
+
+	reg := loadGeoTestRegistry(t)
+	md, _ := reg.FindMethod("/geo.v1.CityService/UpdateCity")
+	if md == nil {
+		t.Fatal("UpdateCity not found in geo test registry")
+	}
+
+	h := &handler{
+		loader:      &stubLoader{cfg: &config.Config{}, configDir: dir},
+		transitions: newGRPCTransitionState(),
+		registry:    reg,
+	}
+
+	// Explicit source, NO explicit wrap — this is the bug shape.
+	c := config.Case{
+		Status:  0,
+		File:    "stubs/cities/{body.city.name}.json",
+		Persist: true,
+		Merge:   "update",
+		Source:  "city",
+		// Wrap: "" — must be inferred from UpdateCityResponse.
+	}
+
+	reqMap := map[string]interface{}{
+		"parent": map[string]interface{}{
+			"continent": "africa",
+			"country":   "MA",
+		},
+		"cityName": "marrakech",
+		"city": map[string]interface{}{
+			"name":       "marrakech",
+			"population": float64(950000),
+		},
+	}
+
+	code, handled, result, _ := h.applyGRPCPersist(
+		c, reqMap, time.Now(),
+		"/geo.v1.CityService/UpdateCity", md,
+	)
+	if !handled || code != codes.OK {
+		t.Fatalf("expected handled=true, OK; got handled=%v, code=%v", handled, code)
+	}
+
+	// The fix: result must be wrapped under the inferred "city" envelope so
+	// EncodeResponse can round-trip it through UpdateCityResponse.
+	inner, ok := result["city"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("BUG REGRESSION: expected result wrapped as {city: ...} via inferred wrap, got %v", result)
+	}
+	if inner["population"] != float64(950000) {
+		t.Errorf("wrapped response population = %v, want 950000", inner["population"])
+	}
+}
+
+// TestResponseWrap exercises the standalone wrap-from-response inference
+// used by the explicit-source-implicit-wrap path in applyGRPCPersist.
+func TestResponseWrap(t *testing.T) {
+	reg := loadGeoTestRegistry(t)
+
+	// UpdateCity: response-wrapped (UpdateCityResponse { City city = 1; }).
+	// ResponseWrap must return "city" (the JSON name of the sole message field).
+	md, _ := reg.FindMethod("/geo.v1.CityService/UpdateCity")
+	if md == nil {
+		t.Fatal("UpdateCity not found")
+	}
+	if got := reg.ResponseWrap(md); got != "city" {
+		t.Errorf("ResponseWrap(UpdateCity) = %q, want %q", got, "city")
+	}
+
+	// PatchCity: direct-entity response (returns City directly). City has
+	// only scalar fields, so ResponseWrap must return "" — there is no
+	// wrapper; the response IS the entity.
+	md, _ = reg.FindMethod("/geo.v1.CityService/PatchCity")
+	if md == nil {
+		t.Fatal("PatchCity not found")
+	}
+	if got := reg.ResponseWrap(md); got != "" {
+		t.Errorf("ResponseWrap(PatchCity) = %q, want \"\" (direct-entity response has no wrap)", got)
+	}
+
+	// nil safety.
+	if got := reg.ResponseWrap(nil); got != "" {
+		t.Errorf("ResponseWrap(nil) = %q, want \"\"", got)
+	}
+}
