@@ -9,9 +9,14 @@ option go_package = "github.com/example/database/v1";
 // corrupting the persisted entity stub.
 
 service DatabaseService {
-  rpc CreateDatabaseInstance (CreateDatabaseInstanceRequest) returns (DatabaseInstance);
-  rpc UpdateDatabaseInstance (UpdateDatabaseInstanceRequest) returns (DatabaseInstance);
-  rpc DeleteDatabaseInstance (DeleteDatabaseInstanceRequest) returns (DeleteDatabaseInstanceResponse);
+  rpc CreateDatabaseInstance  (CreateDatabaseInstanceRequest)  returns (DatabaseInstance);
+  rpc UpdateDatabaseInstance  (UpdateDatabaseInstanceRequest)  returns (DatabaseInstance);
+  rpc DeleteDatabaseInstance  (DeleteDatabaseInstanceRequest)  returns (DeleteDatabaseInstanceResponse);
+  // Ambiguous-input fixture: the request has two non-repeated fields of
+  // type DatabaseInstance, so RequestEntityField must bail out and signal
+  // ambiguity rather than guess. The user is expected to set `source`
+  // explicitly to disambiguate.
+  rpc CompareDatabaseInstances (CompareDatabaseInstancesRequest) returns (DatabaseInstance);
 }
 
 message DatabaseInstance {
@@ -37,3 +42,9 @@ message DeleteDatabaseInstanceRequest {
 }
 
 message DeleteDatabaseInstanceResponse {}
+
+// Two non-repeated DatabaseInstance fields → ambiguous auto-derive.
+message CompareDatabaseInstancesRequest {
+  DatabaseInstance left  = 1;
+  DatabaseInstance right = 2;
+}

@@ -41,9 +41,17 @@ func (h *handler) applyGRPCPersist(
 	// {name, databaseInstance: {...}, updateMask}) from being shallow-merged
 	// into a flat entity stub on `merge="update"`, which would corrupt the
 	// file with both flat fields and a duplicated nested wrapper.
+	//
+	// When the input has multiple matching fields the auto-derive bails
+	// (ambiguous=true) and we log a deduplicated warn so the user has a
+	// breadcrumb to set `source` explicitly.
 	sourceField := c.Source
 	if sourceField == "" {
-		sourceField = h.registry.RequestEntityField(md)
+		derived, ambiguous := h.registry.RequestEntityField(md)
+		if ambiguous {
+			h.warnAutoDeriveAmbiguousOnce(fullMethod)
+		}
+		sourceField = derived
 	}
 	srcMap := reqMap
 	if sourceField != "" {
@@ -52,7 +60,8 @@ func (h *handler) applyGRPCPersist(
 		} else if c.Source != "" {
 			// Only warn when the user explicitly configured a source that
 			// failed to resolve. Auto-derived misses are silent because
-			// they fire on every persist call by design.
+			// they would fire on every persist call by design — c.Source is
+			// the only user-facing signal that a miss is unexpected.
 			logger.Warn("grpc persist source: field not found", "source", c.Source)
 		}
 	}

@@ -316,9 +316,12 @@ func TestRequestEntityField_GoogleConventionUpdate(t *testing.T) {
 	}
 
 	// Input has DatabaseInstance database_instance = 2; output IS DatabaseInstance.
-	got := reg.RequestEntityField(md)
+	got, ambiguous := reg.RequestEntityField(md)
 	if got != "databaseInstance" {
 		t.Errorf("RequestEntityField = %q, want %q", got, "databaseInstance")
+	}
+	if ambiguous {
+		t.Error("expected ambiguous=false for unique match")
 	}
 }
 
@@ -327,9 +330,12 @@ func TestRequestEntityField_GoogleConventionCreate(t *testing.T) {
 	md, _ := reg.FindMethod("/database.v1.DatabaseService/CreateDatabaseInstance")
 
 	// Symmetric with Update — Create also wraps the entity in the request.
-	got := reg.RequestEntityField(md)
+	got, ambiguous := reg.RequestEntityField(md)
 	if got != "databaseInstance" {
 		t.Errorf("RequestEntityField = %q, want %q", got, "databaseInstance")
+	}
+	if ambiguous {
+		t.Error("expected ambiguous=false")
 	}
 }
 
@@ -338,16 +344,20 @@ func TestRequestEntityField_NoMatchingField(t *testing.T) {
 	// DeleteDatabaseInstanceRequest has only a string `name` field — no
 	// field of type DatabaseInstance.
 	md, _ := reg.FindMethod("/database.v1.DatabaseService/DeleteDatabaseInstance")
-	got := reg.RequestEntityField(md)
+	got, ambiguous := reg.RequestEntityField(md)
 	if got != "" {
 		t.Errorf("RequestEntityField = %q, want \"\" (no DatabaseInstance field in request)", got)
+	}
+	if ambiguous {
+		t.Error("expected ambiguous=false for no-match (silent skip)")
 	}
 }
 
 func TestRequestEntityField_NilMD(t *testing.T) {
 	reg := loadDatabaseTestRegistry(t)
-	if got := reg.RequestEntityField(nil); got != "" {
-		t.Errorf("RequestEntityField(nil) = %q, want \"\"", got)
+	got, ambiguous := reg.RequestEntityField(nil)
+	if got != "" || ambiguous {
+		t.Errorf("RequestEntityField(nil) = (%q, %v), want (\"\", false)", got, ambiguous)
 	}
 }
 
@@ -356,9 +366,31 @@ func TestRequestEntityField_FlatRequestNoMatch(t *testing.T) {
 	// Country wrapper field — auto-derive must return "".
 	reg := loadTestRegistry(t)
 	md, _ := reg.FindMethod("/geo.CountryService/UpdateCountry")
-	got := reg.RequestEntityField(md)
+	got, ambiguous := reg.RequestEntityField(md)
 	if got != "" {
 		t.Errorf("RequestEntityField = %q, want \"\" (UpdateCountryRequest has no Country wrapper)", got)
+	}
+	if ambiguous {
+		t.Error("expected ambiguous=false")
+	}
+}
+
+// TestRequestEntityField_AmbiguousReturnsTrue covers the case where a
+// request input has more than one non-repeated field whose message type
+// matches the response output type. The auto-derive must bail out
+// (returning "") and signal ambiguous=true so the caller can warn.
+func TestRequestEntityField_AmbiguousReturnsTrue(t *testing.T) {
+	reg := loadDatabaseTestRegistry(t)
+	md, err := reg.FindMethod("/database.v1.DatabaseService/CompareDatabaseInstances")
+	if err != nil || md == nil {
+		t.Fatalf("FindMethod CompareDatabaseInstances: md=%v err=%v", md, err)
+	}
+	got, ambiguous := reg.RequestEntityField(md)
+	if got != "" {
+		t.Errorf("expected name=\"\" on ambiguous match, got %q", got)
+	}
+	if !ambiguous {
+		t.Error("expected ambiguous=true when input has two DatabaseInstance fields")
 	}
 }
 
@@ -461,6 +493,50 @@ func TestApplyGRPCPersist_AutoDerivesSourceFromProto(t *testing.T) {
 	}
 	if stub["region"] != "us-central1" {
 		t.Errorf("region dropped from stub: got %v", stub["region"])
+	}
+}
+
+// TestApplyGRPCPersist_DeleteOnGoogleConvention verifies that the
+// auto-derive walk is a no-op on the delete merge path: it should not
+// warn, error, or affect the delete semantics even when the request type
+// follows the Google convention. This pins the silent-skip contract on
+// delete so a future refactor can't accidentally fire a Warn on every
+// successful Delete.
+func TestApplyGRPCPersist_DeleteOnGoogleConvention(t *testing.T) {
+	dir := t.TempDir()
+	stubFile := filepath.Join(dir, "stubs", "instances", "db-3.json")
+	if err := os.MkdirAll(filepath.Dir(stubFile), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(stubFile, []byte(`{"id":"db-3"}`), 0644); err != nil {
+		t.Fatalf("write stub: %v", err)
+	}
+
+	reg := loadDatabaseTestRegistry(t)
+	// DeleteDatabaseInstance has no DatabaseInstance field in its request
+	// type — the helper returns ("", false) and the merge path runs cleanly.
+	md, _ := reg.FindMethod("/database.v1.DatabaseService/DeleteDatabaseInstance")
+
+	h := &handler{
+		loader:      &stubLoader{cfg: &config.Config{}, configDir: dir},
+		transitions: newGRPCTransitionState(),
+		registry:    reg,
+	}
+
+	c := config.Case{
+		File:    "stubs/instances/{body.name}.json",
+		Persist: true,
+		Merge:   "delete",
+	}
+	reqMap := map[string]interface{}{"name": "db-3"}
+
+	code, _, _, _ := h.applyGRPCPersist(c, reqMap, time.Now(),
+		"/database.v1.DatabaseService/DeleteDatabaseInstance", md)
+	if code != codes.OK {
+		t.Fatalf("expected OK on delete, got %v", code)
+	}
+	if _, err := os.Stat(stubFile); !os.IsNotExist(err) {
+		t.Errorf("expected stub file to be deleted, stat err=%v", err)
 	}
 }
 

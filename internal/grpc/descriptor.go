@@ -161,25 +161,35 @@ func (r *Registry) FindRepeatedField(md *desc.MethodDescriptor) string {
 // Google API convention for Update<X>Request, e.g.
 //
 //	UpdateDatabaseInstanceRequest { string name = 1; DatabaseInstance database_instance = 2; }
-//	→ returns "databaseInstance"
+//	→ returns ("databaseInstance", false)
 //
-// Used to auto-derive a `source` extraction on persist cases where the user
-// did not set one explicitly, so the wrapper field is unwrapped on the way
-// in instead of being merged verbatim into the persisted file. Returns ""
-// if there is no matching input field, more than one (ambiguous), or md is
-// nil.
-func (r *Registry) RequestEntityField(md *desc.MethodDescriptor) string {
+// Used to auto-derive a `source` extraction on persist cases where the
+// user did not set one explicitly, so the wrapper field is unwrapped on
+// the way in instead of being merged verbatim into the persisted file.
+//
+// Returns ("", false) when there is no matching input field or md is nil
+// (the common no-Google-convention case — silent skip is correct). Returns
+// ("", true) when more than one input field matches the response output
+// type (ambiguous — caller should warn so the user can disambiguate by
+// setting `source` explicitly).
+//
+// The match is done on fully-qualified message names, so wrapper-style
+// response envelopes like google.protobuf.Empty or google.longrunning.Operation
+// are unaffected unless the request happens to have a field of that exact
+// type.
+func (r *Registry) RequestEntityField(md *desc.MethodDescriptor) (name string, ambiguous bool) {
 	if md == nil {
-		return ""
+		return "", false
 	}
 	outType := md.GetOutputType()
 	if outType == nil {
-		return ""
+		return "", false
 	}
 	inType := md.GetInputType()
 	if inType == nil {
-		return ""
+		return "", false
 	}
+	outFQN := outType.GetFullyQualifiedName()
 	var candidate string
 	for _, f := range inType.GetFields() {
 		if f.IsRepeated() || f.IsMap() {
@@ -189,15 +199,15 @@ func (r *Registry) RequestEntityField(md *desc.MethodDescriptor) string {
 		if mt == nil {
 			continue
 		}
-		if mt.GetFullyQualifiedName() != outType.GetFullyQualifiedName() {
+		if mt.GetFullyQualifiedName() != outFQN {
 			continue
 		}
 		if candidate != "" {
-			return "" // ambiguous — more than one matching field
+			return "", true // ambiguous — more than one matching field
 		}
 		candidate = f.GetJSONName()
 	}
-	return candidate
+	return candidate, false
 }
 
 // EntityFieldNames returns the set of JSON and proto field names defined on the

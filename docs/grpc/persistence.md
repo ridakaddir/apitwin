@@ -138,7 +138,7 @@ merge   = "update"
 # source = "databaseInstance"   # inferred from proto descriptor
 ```
 
-The auto-derive only fires when the input has **exactly one** matching wrapper field (ambiguous matches are skipped), and an explicit `source` always takes precedence. For protos that don't follow the convention (e.g. `UpdateCountryRequest { string code = 1; string name = 2; }`), the behaviour is unchanged — there is no wrapper to extract.
+The auto-derive only fires when the input has **exactly one** matching wrapper field. The match is on the response message's fully-qualified type name, so methods that return wrapper envelopes like `google.protobuf.Empty` or `google.longrunning.Operation` are unaffected unless the request happens to carry a field of that exact type. Ambiguous matches (two or more input fields whose type equals the response type) are skipped, and apitwin logs a one-time warning per method so you can disambiguate by setting `source` explicitly. An explicit `source` always wins. For protos that don't follow the convention (e.g. `UpdateCountryRequest { string code = 1; string name = 2; }`), the behaviour is unchanged — there is no wrapper to extract.
 
 See [`examples/grpc-source-persist/`](../../examples/grpc-source-persist/) for a complete working example with four test scenarios.
 
