@@ -1,0 +1,50 @@
+syntax = "proto3";
+package database.v1;
+option go_package = "github.com/example/database/v1";
+
+// Test fixture for the Google-style "Update<Resource>Request { Resource
+// resource = N }" convention. Used by persist_test.go to verify that
+// Registry.RequestEntityField auto-derives the wrapper field name when a
+// route case omits `source`, preventing the request envelope from
+// corrupting the persisted entity stub.
+
+service DatabaseService {
+  rpc CreateDatabaseInstance  (CreateDatabaseInstanceRequest)  returns (DatabaseInstance);
+  rpc UpdateDatabaseInstance  (UpdateDatabaseInstanceRequest)  returns (DatabaseInstance);
+  rpc DeleteDatabaseInstance  (DeleteDatabaseInstanceRequest)  returns (DeleteDatabaseInstanceResponse);
+  // Ambiguous-input fixture: the request has two non-repeated fields of
+  // type DatabaseInstance, so RequestEntityField must bail out and signal
+  // ambiguity rather than guess. The user is expected to set `source`
+  // explicitly to disambiguate.
+  rpc CompareDatabaseInstances (CompareDatabaseInstancesRequest) returns (DatabaseInstance);
+}
+
+message DatabaseInstance {
+  string id           = 1;
+  string display_name = 2;
+  string status       = 3;
+  string tier         = 4;
+  string region       = 5;
+}
+
+message CreateDatabaseInstanceRequest {
+  string           parent            = 1;
+  DatabaseInstance database_instance = 2;
+}
+
+message UpdateDatabaseInstanceRequest {
+  string           name              = 1;
+  DatabaseInstance database_instance = 2;
+}
+
+message DeleteDatabaseInstanceRequest {
+  string name = 1;
+}
+
+message DeleteDatabaseInstanceResponse {}
+
+// Two non-repeated DatabaseInstance fields → ambiguous auto-derive.
+message CompareDatabaseInstancesRequest {
+  DatabaseInstance left  = 1;
+  DatabaseInstance right = 2;
+}

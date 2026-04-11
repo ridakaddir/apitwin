@@ -33,11 +33,35 @@ func (h *handler) applyGRPCPersist(
 	// When source is set, extract only that sub-field from the request body
 	// before any other processing. This lets callers persist a nested entity
 	// (e.g. "service") without polluting the stub with wrapper fields.
+	//
+	// If source is unset, fall back to the proto descriptor: when the request
+	// input type has a field whose message type equals the response output
+	// type (the Google Update<X>Request { X x = 2; ... } convention),
+	// auto-extract that field. This prevents the request envelope (e.g.
+	// {name, databaseInstance: {...}, updateMask}) from being shallow-merged
+	// into a flat entity stub on `merge="update"`, which would corrupt the
+	// file with both flat fields and a duplicated nested wrapper.
+	//
+	// When the input has multiple matching fields the auto-derive bails
+	// (ambiguous=true) and we log a deduplicated warn so the user has a
+	// breadcrumb to set `source` explicitly.
+	sourceField := c.Source
+	if sourceField == "" {
+		derived, ambiguous := h.registry.RequestEntityField(md)
+		if ambiguous {
+			h.warnAutoDeriveAmbiguousOnce(fullMethod)
+		}
+		sourceField = derived
+	}
 	srcMap := reqMap
-	if c.Source != "" {
-		if sub := persist.ExtractSourceField(reqMap, c.Source); sub != nil {
+	if sourceField != "" {
+		if sub := persist.ExtractSourceField(reqMap, sourceField); sub != nil {
 			srcMap = sub
-		} else {
+		} else if c.Source != "" {
+			// Only warn when the user explicitly configured a source that
+			// failed to resolve. Auto-derived misses are silent because
+			// they would fire on every persist call by design — c.Source is
+			// the only user-facing signal that a miss is unexpected.
 			logger.Warn("grpc persist source: field not found", "source", c.Source)
 		}
 	}

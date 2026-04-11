@@ -183,6 +183,34 @@ func (s *grpcTransitionScheduler) schedule(delay time.Duration, filePath string,
 	}()
 }
 
+// HasPending reports whether there is at least one in-flight deferred
+// mutation targeting the given filePath.
+func (s *grpcTransitionScheduler) HasPending(filePath string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.pending[filePath]) > 0
+}
+
+// ScheduleIfIdle arms the route's transition timeline only when there is
+// no pending mutation already targeting filePath. Used by the handler on
+// the merge="update" persist path so that a client write against an
+// existing entity stub does not cancel an in-flight transition timer that
+// was armed by an earlier create.
+//
+// Note on concurrency: the pending check and the subsequent Schedule call
+// are not held under a single mutex lease, so two concurrent callers
+// against the same idle file path can both observe "no pending" and both
+// arm the timeline. The second arm immediately cancels the first via
+// Schedule's CancelFile, leaving exactly one timeline alive — consistent
+// state, just a wasted rearm. The race window is microseconds and
+// inconsequential for a mocking tool with second-scale transitions.
+func (s *grpcTransitionScheduler) ScheduleIfIdle(route *config.GRPCRoute, filePath, configDir string) {
+	if s.HasPending(filePath) {
+		return
+	}
+	s.Schedule(route, filePath, configDir)
+}
+
 // CancelFile cancels any in-flight deferred mutations targeting the given
 // filePath. Called when a file is deleted (via handler's delete merge path)
 // or rescheduled (via Schedule) so stale goroutines cannot stomp a

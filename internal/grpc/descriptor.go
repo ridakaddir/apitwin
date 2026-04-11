@@ -156,6 +156,60 @@ func (r *Registry) FindRepeatedField(md *desc.MethodDescriptor) string {
 	return candidate
 }
 
+// RequestEntityField returns the JSON name of the unique request input
+// field whose message type equals the response output type. This is the
+// Google API convention for Update<X>Request, e.g.
+//
+//	UpdateDatabaseInstanceRequest { string name = 1; DatabaseInstance database_instance = 2; }
+//	→ returns ("databaseInstance", false)
+//
+// Used to auto-derive a `source` extraction on persist cases where the
+// user did not set one explicitly, so the wrapper field is unwrapped on
+// the way in instead of being merged verbatim into the persisted file.
+//
+// Returns ("", false) when there is no matching input field or md is nil
+// (the common no-Google-convention case — silent skip is correct). Returns
+// ("", true) when more than one input field matches the response output
+// type (ambiguous — caller should warn so the user can disambiguate by
+// setting `source` explicitly).
+//
+// The match is done on fully-qualified message names, so wrapper-style
+// response envelopes like google.protobuf.Empty or google.longrunning.Operation
+// are unaffected unless the request happens to have a field of that exact
+// type.
+func (r *Registry) RequestEntityField(md *desc.MethodDescriptor) (name string, ambiguous bool) {
+	if md == nil {
+		return "", false
+	}
+	outType := md.GetOutputType()
+	if outType == nil {
+		return "", false
+	}
+	inType := md.GetInputType()
+	if inType == nil {
+		return "", false
+	}
+	outFQN := outType.GetFullyQualifiedName()
+	var candidate string
+	for _, f := range inType.GetFields() {
+		if f.IsRepeated() || f.IsMap() {
+			continue
+		}
+		mt := f.GetMessageType()
+		if mt == nil {
+			continue
+		}
+		if mt.GetFullyQualifiedName() != outFQN {
+			continue
+		}
+		if candidate != "" {
+			return "", true // ambiguous — more than one matching field
+		}
+		candidate = f.GetJSONName()
+	}
+	return candidate, false
+}
+
 // EntityFieldNames returns the set of JSON and proto field names defined on the
 // entity message identified by the wrap field of the response type. This is used
 // to filter persist data so that only fields belonging to the entity message are

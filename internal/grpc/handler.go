@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jhump/protoreflect/desc" //nolint:staticcheck
@@ -32,6 +33,11 @@ type handler struct {
 	transitions *grpcTransitionState
 	scheduler   *grpcTransitionScheduler
 	target      string // upstream gRPC address, empty if mock-only
+
+	// warnedAmbiguousAutoDerive tracks methods we've already logged an
+	// "ambiguous auto-derive" warning for, so the warn fires once per
+	// method per handler lifetime instead of on every persist call.
+	warnedAmbiguousAutoDerive sync.Map
 }
 
 func newHandler(loader configLoader, registry *Registry, target string) *handler {
@@ -42,6 +48,19 @@ func newHandler(loader configLoader, registry *Registry, target string) *handler
 		scheduler:   newGRPCTransitionScheduler(context.Background()),
 		target:      target,
 	}
+}
+
+// warnAutoDeriveAmbiguousOnce logs a deduplicated warning when a method's
+// request input type has multiple non-repeated fields whose message type
+// matches the response output type. The user must set `source` explicitly
+// to disambiguate; without that, the auto-derive bails out and the persist
+// case will merge the full request envelope into the stub (Bug 1 shape).
+func (h *handler) warnAutoDeriveAmbiguousOnce(fullMethod string) {
+	if _, loaded := h.warnedAmbiguousAutoDerive.LoadOrStore(fullMethod, struct{}{}); loaded {
+		return
+	}
+	logger.Warn("grpc persist auto-derive: multiple input fields match the response type; set `source` explicitly to disambiguate",
+		"method", fullMethod)
 }
 
 // resetTransitions clears all transition timers (called on config hot-reload).
@@ -151,10 +170,18 @@ func (h *handler) serve(srv interface{}, stream grpc.ServerStream) error {
 
 				// Schedule deferred background mutations so the persisted
 				// file transitions on disk over time (e.g. Queued → Ready).
-				// Only after append (resource creation) — mirrors HTTP proxy.
-				if persistedPath != "" && strings.EqualFold(activeCase.Merge, "append") &&
-					len(route.Transitions) > 0 && h.scheduler != nil {
-					h.scheduler.Schedule(route, persistedPath, h.loader.ConfigDir())
+				// Mirrors HTTP proxy: any successful persist that targets a
+				// route with transitions arms the timeline. For append
+				// (creation), Schedule() also cancels any stale timer from
+				// a delete+recreate. For update, ScheduleIfIdle() leaves an
+				// in-flight timer alone so a client write during the
+				// provisioning window does not reset the ready transition.
+				if persistedPath != "" && len(route.Transitions) > 0 && h.scheduler != nil {
+					if strings.EqualFold(activeCase.Merge, "append") {
+						h.scheduler.Schedule(route, persistedPath, h.loader.ConfigDir())
+					} else {
+						h.scheduler.ScheduleIfIdle(route, persistedPath, h.loader.ConfigDir())
+					}
 				}
 
 				// When a DELETE removes a resource, reset transition state so

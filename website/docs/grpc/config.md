@@ -131,7 +131,12 @@ fallback = "ok"
 
 ## Transitions
 
-Time-based transitions work identically to HTTP. The gRPC route key is the `match` pattern:
+Time-based transitions work identically to HTTP. The gRPC route key is the `match` pattern. Both modes are supported:
+
+- **Request-time** — serve different cases based on elapsed time since the first request (no file mutation)
+- **Background** — schedule deferred file mutations after a successful persist (the file on disk transitions through states automatically)
+
+### Request-time transitions
 
 ```toml
 [[grpc_routes]]
@@ -163,7 +168,40 @@ fallback = "submitted"
   json   = '{"status": "approved"}'
 ```
 
-See [Response Transitions](../features/response-transitions.md) for full details on timeline behaviour.
+### Background transitions on persist
+
+When a route declares transitions and its matched case writes to disk via `persist = true`, apitwin schedules deferred background goroutines that apply each transition case's `defaults` to the persisted file as the timeline elapses. This works for **both** `merge = "append"` (resource creation) **and** `merge = "update"` (writes to an existing file).
+
+```toml
+[[grpc_routes]]
+match    = "/database.v1.DatabaseService/CreateDatabaseInstance"
+fallback = "created"
+
+  [[grpc_routes.transitions]]
+  case     = "provisioning"
+  duration = 30
+
+  [[grpc_routes.transitions]]
+  case = "ready"
+
+  [grpc_routes.cases.created]
+  status   = 0
+  file     = "stubs/instances/"
+  persist  = true
+  merge    = "append"
+  key      = "id"
+  defaults = "stubs/defaults/instance-provisioning.json"
+
+  [grpc_routes.cases.ready]
+  persist  = true
+  merge    = "update"
+  defaults = "stubs/defaults/instance-ready.json"
+  # 30s after Create, the ready defaults are merged into the file on disk.
+```
+
+A subsequent client `Update*` call against the same file does **not** reset an in-flight ready timer — apitwin dedupes per-file pending mutations so client writes and the background timeline coexist.
+
+Background transition cases must set `persist = true`, `merge = "update"`, and `defaults` (just like the HTTP equivalent). See [Response Transitions](../features/response-transitions.md) for full timeline semantics.
 
 ---
 
