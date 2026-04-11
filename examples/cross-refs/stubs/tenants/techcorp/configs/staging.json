@@ -1,0 +1,9 @@
+{
+  "tier": "professional",
+  "limits": {
+    "requests": 2500,
+    "concurrency": 25
+  },
+  "features": ["basic-analytics"],
+  "support": "business-hours"
+}
