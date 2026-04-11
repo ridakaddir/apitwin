@@ -277,7 +277,7 @@ wrap = "countries"
 
 Wrapping also applies to `persist` responses (`append` and `update`), so create and update operations return the wrapped shape while the file stays flat.
 
-See [`examples/wrap-test/`](../../examples/wrap-test/) for a complete HTTP example and [`examples/grpc-wrap/`](../../examples/grpc-wrap/) for gRPC.
+See [`examples/wrap-test/`](https://github.com/ridakaddir/apitwin/tree/main/examples/wrap-test/) for a complete HTTP example and [`examples/grpc-wrap/`](https://github.com/ridakaddir/apitwin/tree/main/examples/grpc-wrap/) for gRPC.
 
 ---
 
@@ -293,7 +293,7 @@ See [`examples/wrap-test/`](../../examples/wrap-test/) for a complete HTTP examp
 
 ## Example
 
-See [`examples/directory-stubs/`](../../examples/directory-stubs/) for a complete working example with country listing, creation, retrieval, updates, and deletion.
+See [`examples/directory-stubs/`](https://github.com/ridakaddir/apitwin/tree/main/examples/directory-stubs/) for a complete working example with country listing, creation, retrieval, updates, and deletion.
 
 ---
 

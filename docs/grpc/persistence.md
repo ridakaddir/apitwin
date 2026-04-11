@@ -138,7 +138,7 @@ merge   = "update"
 
 The auto-derive only fires when the input has **exactly one** matching wrapper field. The match is on the response message's fully-qualified type name, so methods that return wrapper envelopes like `google.protobuf.Empty` or `google.longrunning.Operation` are unaffected unless the request happens to carry a field of that exact type. Ambiguous matches (two or more input fields whose type equals the response type) are skipped, and apitwin logs a one-time warning per method so you can disambiguate by setting `source` explicitly. An explicit `source` always wins. For protos that don't follow the convention (e.g. `UpdateCountryRequest { string code = 1; string name = 2; }`), the behaviour is unchanged — there is no wrapper to extract.
 
-See [`examples/grpc-source-persist/`](../../examples/grpc-source-persist/) for a complete working example with four test scenarios.
+See [`examples/grpc-source-persist/`](https://github.com/ridakaddir/apitwin/tree/main/examples/grpc-source-persist/) for a complete working example with four test scenarios.
 
 ---
 
@@ -158,9 +158,9 @@ See [Configuration — Response wrapping](config.md#single-file-wrapping) for de
 
 ## Example
 
-See [`examples/grpc-directory-persist/`](../../examples/grpc-directory-persist/) for a complete working example.
-See [`examples/grpc-wrap/`](../../examples/grpc-wrap/) for an example with response wrapping.
-See [`examples/grpc-source-persist/`](../../examples/grpc-source-persist/) for an example with source extraction.
+See [`examples/grpc-directory-persist/`](https://github.com/ridakaddir/apitwin/tree/main/examples/grpc-directory-persist/) for a complete working example.
+See [`examples/grpc-wrap/`](https://github.com/ridakaddir/apitwin/tree/main/examples/grpc-wrap/) for an example with response wrapping.
+See [`examples/grpc-source-persist/`](https://github.com/ridakaddir/apitwin/tree/main/examples/grpc-source-persist/) for an example with source extraction.
 
 ---
 
