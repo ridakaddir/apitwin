@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/ridakaddir/apitwin/internal/config"
+	"github.com/ridakaddir/apitwin/internal/logger"
 )
 
 // CascadeOperation represents a multi-file mutation operation with transaction semantics.
@@ -444,11 +445,13 @@ func resolveFilePath(pattern string, context RequestContext) string {
 
 	// Replace path parameters (with security validation first, then sanitization)
 	for key, value := range context.PathParams {
-		// Security check: detect dangerous patterns before sanitization
+		// Security check: detect dangerous patterns before sanitization.
+		// The request still proceeds with the sanitized value so downstream
+		// logic stays functional; the warn is the audit trail an operator
+		// can grep for when investigating suspicious traffic.
 		if containsDangerousPatterns(value) && context.ConfigDir != "" {
-			// Log security attempt but continue with sanitized value
-			// This prevents attacks while maintaining functionality
-			_ = value // TODO: Add proper security logging here
+			logger.Warn("cascade: dangerous pattern in path param (sanitized)",
+				"source", "path", "field", key, "attempted", value, "pattern", pattern)
 		}
 		sanitized := sanitizePathValue(value)
 		placeholder := fmt.Sprintf("{path.%s}", key)
@@ -457,10 +460,9 @@ func resolveFilePath(pattern string, context RequestContext) string {
 
 	// Replace query parameters (with security validation first, then sanitization)
 	for key, value := range context.QueryParams {
-		// Security check: detect dangerous patterns before sanitization
 		if containsDangerousPatterns(value) && context.ConfigDir != "" {
-			// Log security attempt but continue with sanitized value
-			_ = value // TODO: Add proper security logging here
+			logger.Warn("cascade: dangerous pattern in query param (sanitized)",
+				"source", "query", "field", key, "attempted", value, "pattern", pattern)
 		}
 		sanitized := sanitizePathValue(value)
 		placeholder := fmt.Sprintf("{query.%s}", key)
