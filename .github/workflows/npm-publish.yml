@@ -40,7 +40,10 @@ jobs:
     # Skip if the upstream Release run failed/cancelled. workflow_dispatch
     # always runs. For workflow_run, we additionally require the triggering
     # Release to have been fired by a tag push (so we know head_branch is a
-    # tag name, not a branch).
+    # tag name, not a branch). Note: if release.yml ever adds non-tag-push
+    # triggers (e.g. a manual workflow_dispatch for re-releasing), those
+    # runs will intentionally NOT cascade here — re-publish via this
+    # workflow's own workflow_dispatch against the existing tag instead.
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'workflow_run' &&
