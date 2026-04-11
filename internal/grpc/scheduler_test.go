@@ -110,6 +110,129 @@ func TestGRPCScheduler_StopCancelsPending(t *testing.T) {
 	}
 }
 
+// TestGRPCScheduler_RescheduleSameFileCancelsStale reproduces a bug where a
+// delete+recreate sequence left a stale goroutine from the original create
+// that then stomped the recreated file with "ready" defaults before its own
+// transition window had elapsed.
+//
+// Timeline:
+//   t=0.0s   Schedule(stubFile, delay=2s)             -> G1 pending
+//   t=0.5s   file deleted (simulated)
+//   t=0.55s  stubFile re-created, Schedule called again -> G2 pending
+//   t=2.0s   G1 fires on the RE-CREATED file (bug)    -> status=Ready too early
+//
+// After the fix, Schedule with the same filePath must cancel any in-flight
+// goroutine for that path so only G2 fires (at t=2.55s).
+func TestGRPCScheduler_RescheduleSameFileCancelsStale(t *testing.T) {
+	dir := t.TempDir()
+
+	defaultsPath := filepath.Join(dir, "defaults-ready.json")
+	writeTestFile(t, defaultsPath, []byte(`{"status": "Ready"}`))
+
+	stubFile := filepath.Join(dir, "fr.json")
+	writeTestFile(t, stubFile, []byte(`{"code": "FR", "status": "Queued"}`))
+
+	route := &config.GRPCRoute{
+		Match:    "/geography.GeographyService/CreateCountry",
+		Fallback: "created",
+		Transitions: []config.Transition{
+			{Case: "provisioning", Duration: 1}, // short for fast test
+			{Case: "ready"},
+		},
+		Cases: map[string]config.Case{
+			"created": {Persist: true, Merge: "append"},
+			"ready":   {Persist: true, Merge: "update", Defaults: "defaults-ready.json"},
+		},
+	}
+
+	sched := newGRPCTransitionScheduler(context.Background())
+	defer sched.Stop()
+
+	// t=0: first Schedule — G1 will try to fire at t=1s.
+	sched.Schedule(route, stubFile, dir)
+
+	// t=0.3s: delete and recreate the file (simulating a delete+recreate
+	// that happens entirely BEFORE G1's delay elapses).
+	time.Sleep(300 * time.Millisecond)
+	if err := os.Remove(stubFile); err != nil {
+		t.Fatalf("remove stubFile: %v", err)
+	}
+	writeTestFile(t, stubFile, []byte(`{"code": "FR", "status": "Queued"}`))
+
+	// t=0.35s: second Schedule for the SAME file — G2 will try to fire at t=1.35s.
+	// The fix requires this call to cancel G1.
+	sched.Schedule(route, stubFile, dir)
+
+	// t=1.1s: G1 (at t=1s) should have been cancelled. The file should still
+	// be "Queued" because G2 hasn't fired yet (it fires at t=1.35s).
+	time.Sleep(750 * time.Millisecond) // total elapsed ~1.05s
+
+	m := readTestJSON(t, stubFile)
+	if m["status"] == "Ready" {
+		t.Fatalf("stale goroutine stomped recreated file too early: status=Ready at t~1.05s; expected status=Queued (G1 should have been cancelled by second Schedule)")
+	}
+	if m["status"] != "Queued" {
+		t.Fatalf("unexpected status at t~1.05s: %v (want Queued)", m["status"])
+	}
+
+	// t=1.6s: G2 has fired (scheduled at t=0.35s + 1s delay = t=1.35s).
+	time.Sleep(550 * time.Millisecond) // total elapsed ~1.6s
+	m = readTestJSON(t, stubFile)
+	if m["status"] != "Ready" {
+		t.Fatalf("G2 did not fire: status=%v at t~1.6s (want Ready)", m["status"])
+	}
+}
+
+// TestGRPCScheduler_CancelFile verifies that CancelFile cancels an in-flight
+// goroutine targeting the given file path without touching others.
+func TestGRPCScheduler_CancelFile(t *testing.T) {
+	dir := t.TempDir()
+
+	defaultsPath := filepath.Join(dir, "defaults.json")
+	writeTestFile(t, defaultsPath, []byte(`{"status": "Ready"}`))
+
+	stubA := filepath.Join(dir, "a.json")
+	stubB := filepath.Join(dir, "b.json")
+	writeTestFile(t, stubA, []byte(`{"name": "a", "status": "Queued"}`))
+	writeTestFile(t, stubB, []byte(`{"name": "b", "status": "Queued"}`))
+
+	route := &config.GRPCRoute{
+		Match:    "/geography.GeographyService/CreateCountry",
+		Fallback: "created",
+		Transitions: []config.Transition{
+			{Case: "provisioning", Duration: 1},
+			{Case: "ready"},
+		},
+		Cases: map[string]config.Case{
+			"created": {Persist: true, Merge: "append"},
+			"ready":   {Persist: true, Merge: "update", Defaults: "defaults.json"},
+		},
+	}
+
+	sched := newGRPCTransitionScheduler(context.Background())
+	defer sched.Stop()
+
+	sched.Schedule(route, stubA, dir)
+	sched.Schedule(route, stubB, dir)
+
+	// Cancel A before its delay elapses.
+	time.Sleep(200 * time.Millisecond)
+	sched.CancelFile(stubA)
+
+	// Wait past the delay.
+	time.Sleep(1200 * time.Millisecond)
+
+	mA := readTestJSON(t, stubA)
+	if mA["status"] == "Ready" {
+		t.Fatalf("CancelFile(stubA) failed: a.json was still updated (status=Ready)")
+	}
+
+	mB := readTestJSON(t, stubB)
+	if mB["status"] != "Ready" {
+		t.Fatalf("CancelFile(stubA) wrongly affected B: b.json status=%v (want Ready)", mB["status"])
+	}
+}
+
 func TestGRPCScheduler_ResetCancelsOldGeneration(t *testing.T) {
 	dir := t.TempDir()
 

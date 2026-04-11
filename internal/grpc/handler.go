@@ -159,9 +159,15 @@ func (h *handler) serve(srv interface{}, stream grpc.ServerStream) error {
 
 				// When a DELETE removes a resource, reset transition state so
 				// subsequent creates use the fallback case, not the terminal
-				// transition case.
+				// transition case. Also cancel any pending scheduled mutations
+				// targeting the deleted file so a stale goroutine cannot stomp
+				// a subsequently-recreated file.
 				if strings.EqualFold(activeCase.Merge, "delete") {
 					h.transitions.ResetMatch(route.Match)
+					if h.scheduler != nil {
+						deletedPath := resolveGRPCFilePath(activeCase.File, reqMap, h.loader.ConfigDir())
+						h.scheduler.CancelFile(deletedPath)
+					}
 				}
 
 				// Encode the persist result into proto wire format and send it
