@@ -91,6 +91,10 @@ func applyPersist(w http.ResponseWriter, r *http.Request, c config.Case, bodyByt
 			}
 			return true, ""
 		}
+		// Expand any remaining live refs (directory refs were intentionally
+		// kept raw on disk) so the response matches what a subsequent GET
+		// would return. Best-effort: on failure, log and return the raw data.
+		updated = resolveResponseRefs(updated, r, bodyBytes, configDir, pathParams)
 		logger.SetSource(w, logger.SourceStub)
 		if c.Wrap != "" {
 			writeJSON(w, c.StatusCode(), map[string]any{c.Wrap: updated})
@@ -137,6 +141,10 @@ func applyPersist(w http.ResponseWriter, r *http.Request, c config.Case, bodyByt
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "stub directory error"})
 			return true, ""
 		}
+		// Expand any remaining live refs (directory refs were intentionally
+		// kept raw on disk) so the response matches what a subsequent GET
+		// would return. Best-effort: on failure, log and return the raw data.
+		result = resolveResponseRefs(result, r, bodyBytes, configDir, pathParams)
 		logger.SetSource(w, logger.SourceStub)
 		if c.Wrap != "" {
 			writeJSON(w, c.StatusCode(), map[string]any{c.Wrap: result})
@@ -175,6 +183,37 @@ func resolveFilePath(filePath string, r *http.Request, bodyBytes []byte, configD
 		filePath = resolveDynamicFile(filePath, r, bodyBytes, routePattern, pathParams)
 	}
 	return absPath(filePath, configDir)
+}
+
+// resolveResponseRefs does a best-effort full ref resolution on persist data
+// before it is returned to the client. The on-disk stub keeps directory refs
+// as live `{{ref:.../}}` templates so subsequent GETs re-resolve them against
+// current state; without this helper a POST/PUT response would return the
+// raw templates, creating a confusing gap between POST and GET visibility of
+// the same record.
+//
+// On any error (target directory does not exist yet, ref resolution failure,
+// JSON round-trip error) the original data is returned unchanged and a warn
+// is logged. The persist write has already succeeded by this point, so the
+// response must always reflect a valid record even when refs cannot expand.
+func resolveResponseRefs(data map[string]interface{}, r *http.Request, bodyBytes []byte, configDir string, pathParams map[string]string) map[string]interface{} {
+	raw, err := json.Marshal(data)
+	if err != nil {
+		logger.Warn("persist response: marshal for ref resolution", "err", err)
+		return data
+	}
+	refCtx := NewRefContext(r, bodyBytes, pathParams)
+	resolved, err := resolveRefsWithContext(raw, configDir, make(map[string]bool), refCtx)
+	if err != nil {
+		logger.Warn("persist response: ref resolution failed", "err", err)
+		return data
+	}
+	var out map[string]interface{}
+	if err := json.Unmarshal(resolved, &out); err != nil {
+		logger.Warn("persist response: unmarshal resolved", "err", err)
+		return data
+	}
+	return out
 }
 
 // loadDefaults reads a defaults JSON file, resolves dynamic placeholders and cross-endpoint

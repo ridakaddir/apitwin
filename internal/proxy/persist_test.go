@@ -265,3 +265,103 @@ func TestUpdateWithSource(t *testing.T) {
 	// Original field preserved.
 	assert.Equal(t, "Europe", result["continent"])
 }
+
+// -----------------------------------------------------------------------
+// POST response directory-ref resolution
+// -----------------------------------------------------------------------
+
+// TestAppendResponseResolvesDirectoryRefs pins the DX contract that POST
+// responses resolve directory refs so clients see the same shape a
+// subsequent GET would return. The on-disk stub still keeps the live
+// {{ref:.../}} template unchanged (so GETs continue to re-resolve on each
+// read), but the response body shows the expanded array.
+//
+// Before this fix: clients got back `"models": "{{ref:stubs/models/}}"`
+// as a literal string in the POST response and had to do a follow-up GET
+// just to see the data — confusing and inconsistent with GET behavior.
+func TestAppendResponseResolvesDirectoryRefs(t *testing.T) {
+	configDir := t.TempDir()
+
+	// Create a small models directory the ref will expand.
+	modelsDir := filepath.Join(configDir, "stubs", "models")
+	require.NoError(t, os.MkdirAll(modelsDir, 0755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(modelsDir, "m1.json"),
+		[]byte(`{"id":"m1","name":"GPT-4"}`),
+		0644,
+	))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(modelsDir, "m2.json"),
+		[]byte(`{"id":"m2","name":"Claude"}`),
+		0644,
+	))
+
+	// Append target directory for the POST.
+	endpointsDir := filepath.Join(configDir, "stubs", "endpoints")
+	require.NoError(t, os.MkdirAll(endpointsDir, 0755))
+
+	// Defaults file with a live directory ref. resolveFileRefs inside
+	// loadDefaults intentionally leaves directory refs raw so the on-disk
+	// stub stays reactive; resolveResponseRefs must expand them for the
+	// client response.
+	defaultsPath := filepath.Join(configDir, "stubs", "defaults", "endpoint.json")
+	require.NoError(t, os.MkdirAll(filepath.Dir(defaultsPath), 0755))
+	require.NoError(t, os.WriteFile(
+		defaultsPath,
+		[]byte(`{"status":"Deploying","models":"{{ref:stubs/models/}}"}`),
+		0644,
+	))
+
+	c := config.Case{
+		Status:   201,
+		File:     endpointsDir + "/",
+		Persist:  true,
+		Merge:    "append",
+		Key:      "endpointId",
+		Defaults: "stubs/defaults/endpoint.json",
+	}
+
+	body := []byte(`{"endpointId":"ep-1","region":"us-east-1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/endpoints", nil)
+	w := httptest.NewRecorder()
+
+	handled, createdPath := applyPersist(w, req, c, body, "/endpoints", configDir, map[string]string{})
+	require.True(t, handled)
+	assert.Equal(t, http.StatusCreated, w.Code)
+
+	// Response body: the directory ref MUST be expanded into an array.
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+
+	models, ok := resp["models"].([]interface{})
+	require.True(t, ok, "models must be a JSON array in the response, got %T: %v", resp["models"], resp["models"])
+	assert.Len(t, models, 2, "both model files must be included in the expanded ref")
+
+	// Sanity: the expanded entries look like the model files we wrote.
+	names := map[string]bool{}
+	for _, m := range models {
+		if rec, ok := m.(map[string]interface{}); ok {
+			if n, ok := rec["name"].(string); ok {
+				names[n] = true
+			}
+		}
+	}
+	assert.True(t, names["GPT-4"], "GPT-4 must be in the expanded models list")
+	assert.True(t, names["Claude"], "Claude must be in the expanded models list")
+
+	// On-disk stub: the live directory ref MUST be preserved raw so
+	// subsequent GETs continue to re-resolve against the current state of
+	// stubs/models/. This is the invariant the fix must NOT break.
+	stub := readJSONFile(t, createdPath)
+	stubModels, ok := stub["models"].(string)
+	require.True(t, ok, "on-disk stub must keep models as a raw ref string, got %T: %v", stub["models"], stub["models"])
+	assert.Contains(t, stubModels, "{{ref:stubs/models/}}",
+		"directory ref must be kept live in the persisted stub file")
+
+	// The non-ref fields from the defaults and the request body should both
+	// be present in the response and on disk.
+	assert.Equal(t, "Deploying", resp["status"])
+	assert.Equal(t, "Deploying", stub["status"])
+	assert.Equal(t, "ep-1", resp["endpointId"])
+	assert.Equal(t, "us-east-1", resp["region"])
+}
