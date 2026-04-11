@@ -9,6 +9,7 @@ import (
 	"github.com/ridakaddir/apitwin/internal/config"
 	"github.com/ridakaddir/apitwin/internal/logger"
 	"github.com/ridakaddir/apitwin/internal/persist"
+	"github.com/ridakaddir/apitwin/internal/transitions"
 )
 
 // grpcTransitionScheduler manages background goroutines that apply deferred
@@ -26,14 +27,8 @@ import (
 // with the wrong defaults before its own transition window elapses.
 type grpcTransitionScheduler struct {
 	mu      sync.Mutex
-	gen     *grpcSchedulerGeneration
+	gen     *transitions.Generation
 	pending map[string][]*pendingMutation // keyed on target filePath
-}
-
-type grpcSchedulerGeneration struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
 }
 
 // pendingMutation is a single in-flight scheduled update for a given filePath.
@@ -44,9 +39,8 @@ type pendingMutation struct {
 }
 
 func newGRPCTransitionScheduler(parent context.Context) *grpcTransitionScheduler {
-	ctx, cancel := context.WithCancel(parent)
 	return &grpcTransitionScheduler{
-		gen:     &grpcSchedulerGeneration{ctx: ctx, cancel: cancel},
+		gen:     transitions.NewGeneration(parent),
 		pending: make(map[string][]*pendingMutation),
 	}
 }
@@ -118,20 +112,20 @@ func (s *grpcTransitionScheduler) schedule(delay time.Duration, filePath string,
 	s.mu.Lock()
 	gen := s.gen
 	// If the current generation has already been cancelled (Stop or Reset
-	// is in flight), do not spawn — calling gen.wg.Add(1) while another
-	// goroutine is in gen.wg.Wait() with a zero counter panics.
-	if gen.ctx.Err() != nil {
+	// is in flight), do not spawn — calling gen.WG.Add(1) while another
+	// goroutine is in gen.WG.Wait() with a zero counter panics.
+	if gen.Ctx.Err() != nil {
 		s.mu.Unlock()
 		return
 	}
-	fileCtx, fileCancel := context.WithCancel(gen.ctx)
+	fileCtx, fileCancel := context.WithCancel(gen.Ctx)
 	pm := &pendingMutation{cancel: fileCancel}
 	s.pending[filePath] = append(s.pending[filePath], pm)
-	gen.wg.Add(1)
+	gen.WG.Add(1)
 	s.mu.Unlock()
 
 	go func() {
-		defer gen.wg.Done()
+		defer gen.WG.Done()
 		defer func() {
 			// Remove this entry from the pending map once the goroutine is
 			// done (either fired or was cancelled). Safe if already removed
@@ -231,24 +225,21 @@ func (s *grpcTransitionScheduler) CancelFile(filePath string) {
 // a concurrent Schedule() on the new generation does not see stale entries
 // from goroutines that are still draining their deferred cleanup.
 func (s *grpcTransitionScheduler) Reset(parent context.Context) {
-	ctx, cancel := context.WithCancel(parent)
-	newGen := &grpcSchedulerGeneration{ctx: ctx, cancel: cancel}
+	newGen := transitions.NewGeneration(parent)
 
 	s.mu.Lock()
 	oldGen := s.gen
-	oldGen.cancel()
 	s.gen = newGen
 	s.pending = make(map[string][]*pendingMutation)
 	s.mu.Unlock()
 
-	oldGen.wg.Wait()
+	oldGen.Stop()
 }
 
 // Stop cancels all pending mutations and waits for goroutines to finish.
 func (s *grpcTransitionScheduler) Stop() {
 	s.mu.Lock()
-	s.gen.cancel()
 	gen := s.gen
 	s.mu.Unlock()
-	gen.wg.Wait()
+	gen.Stop()
 }

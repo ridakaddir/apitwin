@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 	"strings"
 
+	"github.com/ridakaddir/apitwin/internal/conditions"
 	"github.com/ridakaddir/apitwin/internal/config"
 )
 
@@ -16,30 +16,7 @@ import (
 // The request body is read from bodyBytes (already buffered) rather than r.Body.
 func evalCondition(cond config.Condition, r *http.Request, bodyBytes []byte, routePattern string, pathParams map[string]string) bool {
 	val, found := extractValue(cond.Source, cond.Field, r, bodyBytes, routePattern, pathParams)
-
-	switch cond.Op {
-	case "exists":
-		return found
-	case "not_exists":
-		return !found
-	case "eq":
-		return found && val == cond.Value
-	case "neq":
-		return found && val != cond.Value
-	case "contains":
-		return found && strings.Contains(val, cond.Value)
-	case "regex":
-		if !found {
-			return false
-		}
-		re, err := regexp.Compile(cond.Value)
-		if err != nil {
-			return false
-		}
-		return re.MatchString(val)
-	}
-
-	return false
+	return conditions.EvalOp(cond.Op, val, cond.Value, found)
 }
 
 // extractValue retrieves a value from the request based on source and field.

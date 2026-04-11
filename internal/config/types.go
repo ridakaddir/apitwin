@@ -31,6 +31,13 @@ func (r *GRPCRoute) IsEnabled() bool {
 	return *r.Enabled
 }
 
+// GetTransitions returns the route's transition sequence. Satisfies the
+// transitions.RouteLike interface so gRPC routes can drive the shared
+// state machine.
+func (r *GRPCRoute) GetTransitions() []Transition {
+	return r.Transitions
+}
+
 // Route defines a single interceptable HTTP endpoint.
 type Route struct {
 	Method      string          `json:"method"      yaml:"method"      toml:"method"`
@@ -54,6 +61,13 @@ func (r *Route) IsEnabled() bool {
 		return true
 	}
 	return *r.Enabled
+}
+
+// GetTransitions returns the route's transition sequence. Satisfies the
+// transitions.RouteLike interface so REST routes can drive the shared
+// state machine.
+func (r *Route) GetTransitions() []Transition {
+	return r.Transitions
 }
 
 // Condition maps an incoming request attribute to a case name.

@@ -17,9 +17,9 @@ func resolveAt(transitions []config.Transition, elapsed int) string {
 	}
 
 	ts := newTransitionState()
-	ts.firstHit[routeKey(route)] = time.Now().Add(-time.Duration(elapsed) * time.Second)
+	ts.FirstHit[routeKey(route)] = time.Now().Add(-time.Duration(elapsed) * time.Second)
 
-	return ts.resolve(route)
+	return ts.Resolve(route)
 }
 
 func TestResolve_EmptyTransitions(t *testing.T) {
@@ -28,7 +28,7 @@ func TestResolve_EmptyTransitions(t *testing.T) {
 		Match:  "/test",
 	}
 	ts := newTransitionState()
-	got := ts.resolve(route)
+	got := ts.Resolve(route)
 	if got != "" {
 		t.Errorf("resolve with no transitions = %q, want empty string", got)
 	}
@@ -185,16 +185,14 @@ func TestResolve_FirstHitRecordedOnFirstCall(t *testing.T) {
 	ts := newTransitionState()
 
 	// First call should record t0 and return the first case.
-	got := ts.resolve(route)
+	got := ts.Resolve(route)
 	if got != "first" {
 		t.Errorf("first call: got %q, want %q", got, "first")
 	}
 
 	// Verify firstHit was recorded.
 	key := routeKey(route)
-	ts.mu.Lock()
-	_, recorded := ts.firstHit[key]
-	ts.mu.Unlock()
+	_, recorded := ts.FirstHit[key]
 	if !recorded {
 		t.Error("firstHit was not recorded after first resolve call")
 	}
@@ -211,22 +209,18 @@ func TestReset_ClearsFirstHit(t *testing.T) {
 	}
 
 	ts := newTransitionState()
-	ts.resolve(route)
+	ts.Resolve(route)
 
 	key := routeKey(route)
 
-	ts.mu.Lock()
-	_, exists := ts.firstHit[key]
-	ts.mu.Unlock()
+	_, exists := ts.FirstHit[key]
 	if !exists {
 		t.Fatal("expected firstHit entry before reset")
 	}
 
 	ts.Reset()
 
-	ts.mu.Lock()
-	_, exists = ts.firstHit[key]
-	ts.mu.Unlock()
+	_, exists = ts.FirstHit[key]
 	if exists {
 		t.Error("firstHit entry should be cleared after reset")
 	}

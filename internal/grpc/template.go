@@ -1,38 +1,10 @@
 package grpc
 
-import (
-	"bytes"
-	"fmt"
-	"text/template"
-	"time"
+import mocktmpl "github.com/ridakaddir/apitwin/internal/template"
 
-	"github.com/google/uuid"
-)
-
-// renderGRPCTemplate processes {{uuid}}, {{now}}, {{timestamp}} tokens in a JSON string.
-// Mirrors proxy.renderTemplate without the HTTP dependency.
+// renderGRPCTemplate processes {{uuid}}, {{now}}, {{timestamp}} tokens in a
+// JSON string. Thin wrapper over the shared internal/template package so
+// gRPC and REST share a single token renderer.
 func renderGRPCTemplate(s string) (string, error) {
-	funcMap := template.FuncMap{
-		"uuid": func() string {
-			return uuid.New().String()
-		},
-		"now": func() string {
-			return time.Now().UTC().Format(time.RFC3339)
-		},
-		"timestamp": func() string {
-			return fmt.Sprintf("%d", time.Now().UnixMilli())
-		},
-	}
-
-	tmpl, err := template.New("grpc-mock").Funcs(funcMap).Parse(s)
-	if err != nil {
-		return s, err
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, nil); err != nil {
-		return s, err
-	}
-
-	return buf.String(), nil
+	return mocktmpl.RenderTokens(s)
 }

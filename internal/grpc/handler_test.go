@@ -28,7 +28,7 @@ func TestResolveCase_TransitionCaseNotInRoute_UsesFallback(t *testing.T) {
 	}
 
 	// Seed the transition state so it returns "provisioning".
-	h.transitions.firstHit[route.Match] = time.Now()
+	h.transitions.FirstHit[route.Match] = time.Now()
 
 	got := h.resolveCase(route, nil)
 	if got != "created" {
@@ -57,7 +57,7 @@ func TestResolveCase_TransitionCaseInRoute_UsesTransition(t *testing.T) {
 	}
 
 	// Seed the transition state so it returns "loading".
-	h.transitions.firstHit[route.Match] = time.Now()
+	h.transitions.FirstHit[route.Match] = time.Now()
 
 	got := h.resolveCase(route, nil)
 	if got != "loading" {
