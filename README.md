@@ -38,7 +38,7 @@
 - **Object spreading** — `$spread` syntax to merge referenced object properties into the containing object
 - **Type conversion** — `$as` directive to convert between types (e.g. merge an array of objects into a single object)
 - **Dynamic refs in defaults** — `{{ref:stubs/{.field}/data/}}` with request data placeholders for environment-specific defaults
-- **gRPC mock & proxy** — mock unary gRPC methods from `.proto` files with `{body.field}` interpolation and directory wrapping; no `protoc` or codegen required
+- **gRPC mock & proxy** — mock unary gRPC methods from `.proto` files with `{body.field}` interpolation, directory wrapping, persistence (CRUD), and background transitions on `merge = "append"` or `merge = "update"`; no `protoc` or codegen required
 - **Named path parameters** — `{name}` syntax for path extraction, dynamic files, and persistence
 - **Directory-based stubs** — CRUD operations with one JSON file per resource
 - **Reverse proxy fallthrough** — unmatched routes forward to a real upstream API

@@ -1262,6 +1262,8 @@ wrap    = "city"              # response: {"city": {...}}
 
 Dot-paths work for deep nesting: `source = "terrain.summit"` extracts `body.terrain.summit`.
 
+**Auto-derived source (Google API convention).** When `source` is omitted, apitwin inspects the proto descriptor and auto-extracts a wrapper field if the request follows the Google `Update<X>Request { X x = N }` convention — i.e. the input message has exactly one non-repeated field whose message type equals the response output type. Example: `UpdateDatabaseInstanceRequest { string name = 1; DatabaseInstance database_instance = 2; }` returning `DatabaseInstance` → `databaseInstance` is auto-extracted, so a `merge = "update"` case persists cleanly without an explicit `source`. An explicit `source` always wins; protos with flat request fields (`UpdateCountryRequest { string code = 1; string name = 2; }`) are unaffected because there is no wrapper field of the response type to extract.
+
 ### gRPC persistence
 Same directory-based CRUD as HTTP. Full example:
 
@@ -1322,6 +1324,8 @@ fallback = "delete"
 
 ### gRPC transitions
 Identical to HTTP transitions. Both request-time and background modes work.
+
+Background transitions are armed whenever a route's matched persist case successfully writes to disk — for **both** `merge = "append"` (resource creation) and `merge = "update"` (writes against an existing entity stub). A subsequent client `Update*` against a file with an in-flight transition does **not** reset the timer: apitwin tracks pending mutations per file path and skips re-arming when one is already running, so client writes and the background timeline coexist (matches HTTP proxy semantics). Transition cases must still set `persist = true`, `merge = "update"`, and `defaults`.
 
 ---
 
@@ -1668,7 +1672,8 @@ fallback = "data"
 | Cross-ref security error | Using `../` or absolute paths in refs | Refs must stay within config directory; use relative paths |
 | Defaults not merging | Expecting defaults to override body | Body wins over defaults (defaults are the base layer) |
 | Fallback served with transitions | Using `fallback` alongside `transitions` | When transitions are defined, `transitions[0]` is served from the start — not the fallback. Put your initial state as the first transition entry. |
-| Background transition not firing | Missing `persist`/`merge` on transition case | Background transition cases require `persist = true`, `merge = "update"`, and `defaults` to be set |
+| Background transition not firing | Missing `persist`/`merge` on transition case | Background transition cases require `persist = true`, `merge = "update"`, and `defaults` to be set. Both `merge = "append"` and `merge = "update"` matched cases arm the scheduler — the matched case's merge type does not gate scheduling. |
+| gRPC stub file accumulates a duplicate wrapper field on update | `merge = "update"` case persists the entire request envelope because `source` is unset and the request has a wrapper field whose name does not match the response type | Set `source = "fieldName"` explicitly, OR rely on auto-derive: when the request follows the Google `Update<X>Request { X x = N }` convention (input has a non-repeated field whose message type equals the response output type), apitwin extracts it automatically. If you see both flat fields and a duplicated nested wrapper key in the persisted file, the wrapper field name didn't match — set `source` explicitly. |
 
 ### Debugging tips
 - Check terminal output: `via=stub` means served from mock, `via=proxy` means forwarded to upstream

@@ -104,6 +104,8 @@ Transitions on a **POST route** schedule background file mutations after a resou
 
 This is ideal for simulating city verification workflows, country registration pipelines, or any resource that transitions through states after creation.
 
+> **gRPC equivalent:** the same model applies to gRPC routes that persist. Background transitions are armed whenever a route's matched case writes to disk via `persist = true` — both for `merge = "append"` (creation) **and** for `merge = "update"` (writes to an existing entity stub). A subsequent client `Update*` against a file with an in-flight transition does not reset the timer; apitwin dedupes pending mutations per file path. See [gRPC config — Background transitions on persist](../grpc/config.md#background-transitions-on-persist).
+
 ### Example: city verification lifecycle
 
 ```toml

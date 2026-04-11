@@ -111,6 +111,35 @@ source = "terrain.summit"   # extracts body.terrain.summit
 
 **Without source**, the entire request body is merged into the stub — routing fields like `continentCode`, `regionId` leak in, and the nested object is added as-is rather than being unwrapped for the merge.
 
+### Auto-derived source (Google API convention)
+
+When `source` is omitted, apitwin inspects the proto descriptor and **automatically extracts a wrapper field if the request follows the Google `Update<X>Request { X x = N }` convention** — i.e. the request input message has a non-repeated field whose message type equals the response output type.
+
+Given:
+
+```proto
+service DatabaseService {
+  rpc UpdateDatabaseInstance (UpdateDatabaseInstanceRequest) returns (DatabaseInstance);
+}
+
+message UpdateDatabaseInstanceRequest {
+  string           name              = 1;
+  DatabaseInstance database_instance = 2;   // ← matches response type → auto-extracted
+}
+```
+
+…the following case persists cleanly without an explicit `source`:
+
+```toml
+[grpc_routes.cases.updated]
+file    = "stubs/instances/{body.databaseInstance.id}.json"
+persist = true
+merge   = "update"
+# source = "databaseInstance"   # inferred from proto descriptor
+```
+
+The auto-derive only fires when the input has **exactly one** matching wrapper field (ambiguous matches are skipped), and an explicit `source` always takes precedence. For protos that don't follow the convention (e.g. `UpdateCountryRequest { string code = 1; string name = 2; }`), the behaviour is unchanged — there is no wrapper to extract.
+
 See [`examples/grpc-source-persist/`](../../examples/grpc-source-persist/) for a complete working example with four test scenarios.
 
 ---
