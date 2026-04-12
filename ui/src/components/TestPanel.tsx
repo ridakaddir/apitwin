@@ -1,13 +1,15 @@
 import { useEffect } from "react";
 import type { Route } from "../types/config";
-import type { TestTarget } from "../types/config";
+import type { TestTarget, GRPCMethodSchema } from "../types/config";
 import { RequestTester } from "./RequestTester";
 
 export function TestPanel({
   target,
+  grpcSchemas,
   onClose,
 }: {
   target: TestTarget | null;
+  grpcSchemas: GRPCMethodSchema[] | null;
   onClose: () => void;
 }) {
   // Close on Escape
@@ -59,7 +61,13 @@ export function TestPanel({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          {target && <RequestTester route={target.route} kind={target.kind} />}
+          {target && (
+            <RequestTester
+              route={target.route}
+              kind={target.kind}
+              grpcSchemas={grpcSchemas}
+            />
+          )}
         </div>
       </div>
     </>

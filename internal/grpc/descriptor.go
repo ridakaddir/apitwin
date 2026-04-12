@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/jhump/protoreflect/desc"            //nolint:staticcheck
 	"github.com/jhump/protoreflect/desc/protoparse" //nolint:staticcheck
 	"github.com/jhump/protoreflect/dynamic"         //nolint:staticcheck
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/descriptorpb"
 )
 
 // Registry compiles .proto files at startup and provides method/message lookup
@@ -349,4 +351,129 @@ func (r *Registry) EncodeResponse(md *desc.MethodDescriptor, jsonBytes []byte) (
 		return nil, fmt.Errorf("marshal response proto: %w", err)
 	}
 	return b, nil
+}
+
+// EncodeRequest takes a JSON blob and serialises it into wire bytes for the
+// given method's input type. Symmetric with DecodeRequest — used by the
+// devtool invoker to send browser-originated requests to the gRPC server.
+func (r *Registry) EncodeRequest(md *desc.MethodDescriptor, jsonBytes []byte) ([]byte, error) {
+	msg := r.factory.NewDynamicMessage(md.GetInputType())
+	if err := msg.UnmarshalJSON(jsonBytes); err != nil {
+		return nil, fmt.Errorf("unmarshal request json: %w", err)
+	}
+	b, err := msg.Marshal()
+	if err != nil {
+		return nil, fmt.Errorf("marshal request proto: %w", err)
+	}
+	return b, nil
+}
+
+// DecodeResponse takes wire bytes for the given method's output type and
+// returns them re-encoded as protojson. Symmetric with EncodeResponse.
+func (r *Registry) DecodeResponse(md *desc.MethodDescriptor, b []byte) ([]byte, error) {
+	msg := r.factory.NewDynamicMessage(md.GetOutputType())
+	if err := msg.Unmarshal(b); err != nil {
+		return nil, fmt.Errorf("unmarshal response proto: %w", err)
+	}
+	j, err := msg.MarshalJSON()
+	if err != nil {
+		return nil, fmt.Errorf("marshal response json: %w", err)
+	}
+	return j, nil
+}
+
+// MethodSchema describes one RPC method for the devtool UI: method path,
+// input/output type FQNs, streaming flag, and the list of top-level input
+// fields so the UI can render a form or show a reference panel.
+type MethodSchema struct {
+	Method     string      `json:"method"`
+	Service    string      `json:"service"`
+	InputType  string      `json:"inputType"`
+	OutputType string      `json:"outputType"`
+	Streaming  bool        `json:"streaming"`
+	Fields     []FieldInfo `json:"fields"`
+}
+
+// FieldInfo is a flattened view of a single message field suitable for JSON
+// rendering in the devtool UI.
+type FieldInfo struct {
+	Name        string `json:"name"`
+	JSONName    string `json:"jsonName"`
+	Kind        string `json:"kind"`
+	Repeated    bool   `json:"repeated"`
+	MessageType string `json:"messageType,omitempty"`
+	EnumType    string `json:"enumType,omitempty"`
+}
+
+// Schema returns a devtool-friendly summary of every method in the registry,
+// ordered by method path for stable UI display.
+func (r *Registry) Schema() []MethodSchema {
+	out := make([]MethodSchema, 0, len(r.methods))
+	for key, md := range r.methods {
+		out = append(out, MethodSchema{
+			Method:     key,
+			Service:    md.GetService().GetFullyQualifiedName(),
+			InputType:  md.GetInputType().GetFullyQualifiedName(),
+			OutputType: md.GetOutputType().GetFullyQualifiedName(),
+			Streaming:  md.IsClientStreaming() || md.IsServerStreaming(),
+			Fields:     describeFields(md.GetInputType()),
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Method < out[j].Method })
+	return out
+}
+
+func describeFields(mt *desc.MessageDescriptor) []FieldInfo {
+	if mt == nil {
+		return nil
+	}
+	fields := mt.GetFields()
+	out := make([]FieldInfo, 0, len(fields))
+	for _, f := range fields {
+		fi := FieldInfo{
+			Name:     f.GetName(),
+			JSONName: f.GetJSONName(),
+			Kind:     fieldKind(f),
+			Repeated: f.IsRepeated() && !f.IsMap(),
+		}
+		if sub := f.GetMessageType(); sub != nil {
+			fi.MessageType = sub.GetFullyQualifiedName()
+		}
+		if en := f.GetEnumType(); en != nil {
+			fi.EnumType = en.GetFullyQualifiedName()
+		}
+		out = append(out, fi)
+	}
+	return out
+}
+
+func fieldKind(f *desc.FieldDescriptor) string {
+	if f.IsMap() {
+		return "map"
+	}
+	switch f.GetType() {
+	case descriptorpb.FieldDescriptorProto_TYPE_DOUBLE:
+		return "double"
+	case descriptorpb.FieldDescriptorProto_TYPE_FLOAT:
+		return "float"
+	case descriptorpb.FieldDescriptorProto_TYPE_INT64, descriptorpb.FieldDescriptorProto_TYPE_SFIXED64, descriptorpb.FieldDescriptorProto_TYPE_SINT64:
+		return "int64"
+	case descriptorpb.FieldDescriptorProto_TYPE_UINT64, descriptorpb.FieldDescriptorProto_TYPE_FIXED64:
+		return "uint64"
+	case descriptorpb.FieldDescriptorProto_TYPE_INT32, descriptorpb.FieldDescriptorProto_TYPE_SFIXED32, descriptorpb.FieldDescriptorProto_TYPE_SINT32:
+		return "int32"
+	case descriptorpb.FieldDescriptorProto_TYPE_UINT32, descriptorpb.FieldDescriptorProto_TYPE_FIXED32:
+		return "uint32"
+	case descriptorpb.FieldDescriptorProto_TYPE_BOOL:
+		return "bool"
+	case descriptorpb.FieldDescriptorProto_TYPE_STRING:
+		return "string"
+	case descriptorpb.FieldDescriptorProto_TYPE_BYTES:
+		return "bytes"
+	case descriptorpb.FieldDescriptorProto_TYPE_ENUM:
+		return "enum"
+	case descriptorpb.FieldDescriptorProto_TYPE_MESSAGE, descriptorpb.FieldDescriptorProto_TYPE_GROUP:
+		return "message"
+	}
+	return "unknown"
 }

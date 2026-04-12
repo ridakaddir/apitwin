@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 
 	"github.com/ridakaddir/apitwin/internal/config"
 	"github.com/ridakaddir/apitwin/internal/logger"
@@ -40,6 +41,9 @@ type Server struct {
 	opts    ServerOptions
 	srv     *grpc.Server
 	handler *handler
+
+	invokerOnce sync.Once
+	invoker     *Invoker
 }
 
 // NewServer initialises the gRPC server: parses proto files, wires the handler,
@@ -115,6 +119,17 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 }
 
+// Invoker returns a devtool-facing gRPC client for this server, constructed
+// on first use. The client dials localhost:<Port> and shares the server's
+// proto registry so it can transcode JSON request/response bodies on behalf
+// of browser callers.
+func (s *Server) Invoker() *Invoker {
+	s.invokerOnce.Do(func() {
+		s.invoker = newInvoker(s.handler.registry, fmt.Sprintf("localhost:%d", s.opts.Port))
+	})
+	return s.invoker
+}
+
 // NotifyReload resets transition state after a config hot-reload.
 // Called from the config loader's onChange callback.
 func (s *Server) NotifyReload() {
@@ -126,6 +141,9 @@ func (s *Server) NotifyReload() {
 // Called on server shutdown.
 func (s *Server) Stop() {
 	s.handler.scheduler.Stop()
+	if s.invoker != nil {
+		_ = s.invoker.Close()
+	}
 }
 
 // protoServiceInfoProvider satisfies reflection.ServiceInfoProvider using our

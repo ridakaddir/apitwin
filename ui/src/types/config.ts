@@ -67,3 +67,28 @@ export interface TestTarget {
   route: Route | GRPCRoute;
   kind: "http" | "grpc";
 }
+
+export interface GRPCMethodSchema {
+  method: string;
+  service: string;
+  inputType: string;
+  outputType: string;
+  streaming: boolean;
+  fields: GRPCFieldInfo[];
+}
+
+export interface GRPCFieldInfo {
+  name: string;
+  jsonName: string;
+  kind: string;
+  repeated: boolean;
+  messageType?: string;
+  enumType?: string;
+}
+
+export interface GRPCInvokeResult {
+  code: string;
+  message?: string;
+  response?: unknown;
+  latencyMs: number;
+}
