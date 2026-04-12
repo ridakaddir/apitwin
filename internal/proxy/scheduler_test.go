@@ -25,6 +25,7 @@ type stubConfigLoader struct {
 func (s *stubConfigLoader) Get() *config.Config         { return s.cfg }
 func (s *stubConfigLoader) AddRoute(route config.Route) {}
 func (s *stubConfigLoader) ConfigDir() string           { return s.configDir }
+func (s *stubConfigLoader) StubRoot() string            { return s.configDir }
 
 // writeJSONFile writes a map to a JSON file.
 func writeJSONFile(t *testing.T, path string, data map[string]interface{}) {

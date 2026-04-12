@@ -81,10 +81,17 @@ start_server() {
     echo "----"
     echo "$(date -u +%FT%TZ) starting server grpc_port=$GRPC_PORT http_port=$HTTP_PORT binary=$BINARY"
   } >> "$LOG_FILE"
+  # --no-runtime-dir: the QA scenarios pre-seed stub files directly in
+  # $STUBS_DIR after start_server and then assert against the same paths
+  # post-mutation. The default runtime-mirror behavior would hide those
+  # writes from the running server (it reads/writes via .apitwin/state/).
+  # This harness exists to regression-test gRPC auto-derive persist
+  # semantics — not the runtime dir feature — so use the legacy path.
   "$BINARY" --config "$CONFIG_DIR" \
     --grpc-proto "$PROTO_FILE" \
     --grpc-port "$GRPC_PORT" \
     --port "$HTTP_PORT" \
+    --no-runtime-dir \
     >>"$LOG_FILE" 2>&1 &
   SERVER_PID=$!
   local i

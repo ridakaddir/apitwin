@@ -29,12 +29,14 @@ func defaultConfig() string {
 var version = "dev"
 
 var (
-	target     string
-	port       int
-	configFile string
-	apiPrefix  string
-	recordMode bool
-	initMode   bool
+	target       string
+	port         int
+	configFile   string
+	apiPrefix    string
+	recordMode   bool
+	initMode     bool
+	noRuntimeDir bool
+	ephemeral    bool
 
 	// gRPC flags — server only starts when --grpc-proto is provided.
 	grpcPort        int
@@ -64,6 +66,8 @@ func init() {
 	rootCmd.Flags().StringVarP(&apiPrefix, "api-prefix", "a", "", "Strip this prefix from request paths before matching routes and forwarding to upstream (e.g. /api)")
 	rootCmd.Flags().BoolVar(&recordMode, "record", false, "Record mode: proxy all requests and save responses as stubs")
 	rootCmd.Flags().BoolVar(&initMode, "init", false, "Scaffold an apitwin.toml template in the current directory")
+	rootCmd.Flags().BoolVar(&ephemeral, "ephemeral", false, "Mirror stubs into a tempdir wiped on shutdown; nothing lands on disk next to the config")
+	rootCmd.Flags().BoolVar(&noRuntimeDir, "no-runtime-dir", false, "Write mutations back to seed stubs (legacy, dirties git)")
 
 	// gRPC flags.
 	rootCmd.Flags().IntVar(&grpcPort, "grpc-port", 50051, "gRPC server port (only used when --grpc-proto is provided)")
@@ -95,11 +99,13 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	opts := proxy.ServerOptions{
-		Target:     target,
-		Port:       port,
-		ConfigPath: cfg,
-		ApiPrefix:  apiPrefix,
-		RecordMode: recordMode,
+		Target:       target,
+		Port:         port,
+		ConfigPath:   cfg,
+		ApiPrefix:    apiPrefix,
+		RecordMode:   recordMode,
+		NoRuntimeDir: noRuntimeDir,
+		Ephemeral:    ephemeral,
 	}
 
 	srv, err := proxy.NewServer(opts)

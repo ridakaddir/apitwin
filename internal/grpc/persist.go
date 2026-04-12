@@ -27,7 +27,7 @@ func (h *handler) applyGRPCPersist(
 	fullMethod string,
 	md *desc.MethodDescriptor,
 ) (code codes.Code, handled bool, result map[string]interface{}, persistedPath string) {
-	configDir := h.loader.ConfigDir()
+	configDir := h.loader.StubRoot()
 	filePath := resolveGRPCFilePath(c.File, reqMap, configDir)
 
 	// When source is set, extract only that sub-field from the request body

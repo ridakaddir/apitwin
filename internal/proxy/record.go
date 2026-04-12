@@ -13,6 +13,7 @@ import (
 
 	"github.com/ridakaddir/apitwin/internal/config"
 	"github.com/ridakaddir/apitwin/internal/logger"
+	apitwinruntime "github.com/ridakaddir/apitwin/internal/runtime"
 )
 
 // routeLoader is the subset of config.Loader used by recorder.
@@ -24,7 +25,15 @@ type routeLoader interface {
 // stub file, appends an enabled route stub to the config file, and immediately
 // injects the route into the in-memory config so the next request is served
 // from the stub without a restart.
-func recorder(configPath string, loader routeLoader) responseRecorder {
+//
+// configPath is the seed config dir (recorded.toml and the canonical stub
+// files live here — the dev commits them). stubRoot is the directory the
+// running server actually reads stubs from: either the runtime mirror dir,
+// or configPath when --no-runtime-dir is set. When they differ, each new
+// stub is dual-written to both so the seed copy is committable and the
+// runtime copy is what the in-memory route reads from during the current
+// session.
+func recorder(configPath, stubRoot string, loader routeLoader) responseRecorder {
 	// seen tracks method+path pairs already recorded this session to avoid
 	// appending duplicate routes on repeated requests to the same endpoint.
 	seen := make(map[string]bool)
@@ -84,12 +93,31 @@ func recorder(configPath string, loader routeLoader) responseRecorder {
 			return
 		}
 
+		// Dual-write into the runtime mirror so the injected in-memory route
+		// (which points at the runtime copy) serves the stub immediately.
+		// When stubRoot == configPath (legacy --no-runtime-dir mode) this is
+		// a no-op.
+		runtimeStubPath := stubPath
+		if stubRoot != "" && stubRoot != configPath {
+			runtimeStubPath = filepath.Join(stubRoot, "stubs", filename)
+			if err := os.MkdirAll(filepath.Dir(runtimeStubPath), 0755); err != nil {
+				logger.Error("record: creating runtime stubs dir", "err", err)
+				return
+			}
+			if err := os.WriteFile(runtimeStubPath, body, 0644); err != nil {
+				logger.Error("record: writing runtime stub", "file", runtimeStubPath, "err", err)
+				return
+			}
+		}
+
 		// Mark as seen so we don't record it again this session.
 		seen[key] = true
 
-		// Use absolute stub path for the in-memory route so file reads work
-		// regardless of the process working directory.
-		absStubPath := stubPath
+		// Use the runtime copy's absolute path for the in-memory route so
+		// file reads work regardless of the process working directory and
+		// so any future persist mutation on this route stays in the runtime
+		// dir (never touching the committed seed).
+		absStubPath := runtimeStubPath
 
 		// Immediately inject the route into the in-memory config so the very
 		// next request to this path is served from the stub (via=stub).
@@ -272,9 +300,18 @@ func initStubTemplate() string {
 `
 }
 
-// Init writes apitwin.toml and stubs/users.json to the given directory.
+// Init writes apitwin.toml and stubs/users.json to the given directory and
+// adds the runtime state dir to the project's .gitignore so mutation traffic
+// during a session doesn't leave modified stub files in git status.
 func Init(dir string) error {
-	return writeInitFiles(dir)
+	if err := writeInitFiles(dir); err != nil {
+		return err
+	}
+	if err := apitwinruntime.EnsureGitignore(dir); err != nil {
+		// Non-fatal: scaffolding still succeeded.
+		logger.Warn("init: could not update .gitignore", "err", err)
+	}
+	return nil
 }
 
 // writeInitFiles writes apitwin.toml and stubs/users.json to the given directory.

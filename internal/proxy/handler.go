@@ -21,10 +21,18 @@ type Handler struct {
 }
 
 // configLoader abstracts config.Loader so it can be mocked in tests.
+//
+// ConfigDir() returns the seed directory (where the dev's committed stubs
+// live). StubRoot() returns the base path that stub I/O should resolve
+// against — either the runtime mirror directory or, in legacy mode, the
+// seed directory. Always use StubRoot() for request-time reads/writes and
+// ConfigDir() only for operations that must target the seed (e.g. record
+// mode writing routes into the user's config file).
 type configLoader interface {
 	Get() *config.Config
 	AddRoute(route config.Route)
 	ConfigDir() string
+	StubRoot() string
 }
 
 // NewHandler builds a new Handler with a fresh transition state.
@@ -44,10 +52,14 @@ func NewHandlerWithTransitions(loader configLoader, rp *httputil.ReverseProxy, r
 	apiPrefix = strings.TrimRight(apiPrefix, "/")
 
 	// Create the recorder once so its internal `seen` dedup map persists
-	// across all requests for the lifetime of the server.
+	// across all requests for the lifetime of the server. Recorded stubs
+	// are dual-written: the canonical copy lands in the seed dir (so the
+	// dev can commit them) and an immediate working copy lands in the
+	// runtime mirror (so the just-injected route reads from a path that
+	// participates in StubRoot semantics).
 	var rec responseRecorder
 	if recordMode {
-		rec = recorder(loader.ConfigDir(), loader)
+		rec = recorder(loader.ConfigDir(), loader.StubRoot(), loader)
 	}
 
 	return &Handler{
@@ -135,7 +147,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				target = buf
 			}
 
-			handled, persistedPath := applyPersist(target, requestForExtraction, c, bodyBytes, route.Match, h.loader.ConfigDir(), pathParams)
+			handled, persistedPath := applyPersist(target, requestForExtraction, c, bodyBytes, route.Match, h.loader.StubRoot(), pathParams)
 			if handled {
 				// If the buffered response is a 404 (file not found for
 				// update), fall through to the fallback case. This handles
@@ -145,7 +157,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				if buf != nil && buf.status == http.StatusNotFound {
 					fallbackCase, ok := route.Cases[route.Fallback]
 					if ok && fallbackCase.Persist {
-						handled2, persistedPath2 := applyPersist(w, requestForExtraction, fallbackCase, bodyBytes, route.Match, h.loader.ConfigDir(), pathParams)
+						handled2, persistedPath2 := applyPersist(w, requestForExtraction, fallbackCase, bodyBytes, route.Match, h.loader.StubRoot(), pathParams)
 						if handled2 {
 							if persistedPath2 != "" {
 								if strings.EqualFold(fallbackCase.Merge, "append") && h.stubWatcher != nil {
@@ -153,7 +165,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								}
 								if len(route.Transitions) > 0 && h.scheduler != nil {
 									refCtx := NewRefContext(requestForExtraction, bodyBytes, pathParams)
-									h.scheduler.Schedule(route, persistedPath2, h.loader.ConfigDir(), refCtx)
+									h.scheduler.Schedule(route, persistedPath2, h.loader.StubRoot(), refCtx)
 								}
 							}
 							if strings.EqualFold(fallbackCase.Merge, "delete") {
@@ -189,7 +201,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					// update (resource mutation) operations.
 					if len(route.Transitions) > 0 && h.scheduler != nil {
 						refCtx := NewRefContext(requestForExtraction, bodyBytes, pathParams)
-						h.scheduler.Schedule(route, persistedPath, h.loader.ConfigDir(), refCtx)
+						h.scheduler.Schedule(route, persistedPath, h.loader.StubRoot(), refCtx)
 					}
 				}
 
@@ -209,7 +221,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		// Serve mock response into a buffer so we can inspect it first.
 		rec := newResponseRecorder(w)
-		serveMock(rec, requestForExtraction, c, bodyBytes, h.loader.ConfigDir(), route.Match, pathParams)
+		serveMock(rec, requestForExtraction, c, bodyBytes, h.loader.StubRoot(), route.Match, pathParams)
 
 		// If the dynamic file was missing, try next condition / fallback / proxy.
 		if isFileMissing(rec) {

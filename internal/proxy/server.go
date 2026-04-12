@@ -12,6 +12,7 @@ import (
 
 	"github.com/ridakaddir/apitwin/internal/config"
 	"github.com/ridakaddir/apitwin/internal/logger"
+	apitwinruntime "github.com/ridakaddir/apitwin/internal/runtime"
 	uifs "github.com/ridakaddir/apitwin/ui"
 )
 
@@ -22,6 +23,16 @@ type ServerOptions struct {
 	ConfigPath string
 	ApiPrefix  string // stripped from request path before route matching and upstream forwarding
 	RecordMode bool
+
+	// NoRuntimeDir disables the runtime state mirror and writes mutations
+	// back to the seed stub files (legacy behavior). Dirties git on every
+	// mutation — only set when reproducing the pre-runtime-dir experience.
+	NoRuntimeDir bool
+
+	// Ephemeral puts the runtime state directory in a tempdir that is
+	// wiped on shutdown. Useful for CI and one-shot demos. Mutually
+	// exclusive with NoRuntimeDir (ephemeral wins if both are set).
+	Ephemeral bool
 }
 
 // Server wraps the HTTP server and the config loader.
@@ -31,6 +42,12 @@ type Server struct {
 	srv         *http.Server
 	scheduler   *transitionScheduler
 	stubWatcher *StubWatcher
+
+	// runtimeDir is the mirror directory stub I/O is redirected to. Empty
+	// in legacy (NoRuntimeDir) mode.
+	runtimeDir string
+	// ephemeralDir is set when Ephemeral is true; removed on shutdown.
+	ephemeralDir string
 }
 
 // NewServer initialises the proxy server.
@@ -59,11 +76,55 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		return nil, fmt.Errorf("loading config: %w", err)
 	}
 
+	// Runtime state directory bootstrap.
+	//
+	// Unless --no-runtime-dir is passed, mirror the seed tree into either
+	// .apitwin/state/ (default) or a tempdir (--ephemeral) and redirect all
+	// stub I/O there. This keeps git clean after mutation traffic: the seed
+	// files are never touched once the mirror is created.
+	var (
+		runtimeDir   string
+		ephemeralDir string
+	)
+	switch {
+	case opts.NoRuntimeDir:
+		logger.Warn("runtime state dir disabled (--no-runtime-dir): mutations will write back to seed stubs and dirty git")
+	case opts.Ephemeral:
+		edir, eErr := apitwinruntime.Ephemeral()
+		if eErr != nil {
+			sched.Stop()
+			return nil, fmt.Errorf("creating ephemeral runtime dir: %w", eErr)
+		}
+		if mErr := apitwinruntime.MirrorInto(loader.ConfigDir(), edir); mErr != nil {
+			_ = apitwinruntime.Cleanup(edir)
+			sched.Stop()
+			return nil, fmt.Errorf("mirroring into ephemeral runtime dir: %w", mErr)
+		}
+		runtimeDir = edir
+		ephemeralDir = edir
+		logger.Info("runtime state dir (ephemeral)", "dir", edir)
+	default:
+		rdir, mErr := apitwinruntime.Mirror(loader.ConfigDir())
+		if mErr != nil {
+			sched.Stop()
+			return nil, fmt.Errorf("mirroring runtime state dir: %w", mErr)
+		}
+		runtimeDir = rdir
+		if eiErr := apitwinruntime.EnsureGitignore(loader.ConfigDir()); eiErr != nil {
+			logger.Warn("could not update .gitignore", "err", eiErr)
+		}
+		if !apitwinruntime.CheckGitignore(loader.ConfigDir()) {
+			logger.Warn("runtime state dir is not gitignored — add '.apitwin/state/' to your .gitignore")
+		}
+	}
+	loader.SetStubRoot(runtimeDir)
+
 	// Start the stub watcher to automatically re-evaluate cross-references
 	// when stub files change (e.g. deployment created → endpoint's
-	// deployedModels updates immediately).
+	// deployedModels updates immediately). Watches the runtime dir so it
+	// sees the live, mutating copies — not the frozen seed files.
 	stubWatcher := NewStubWatcher(StubWatcherOptions{
-		ConfigDir: loader.ConfigDir(),
+		ConfigDir: loader.StubRoot(),
 		OnUpdate: func() {
 			logger.Info("stub watcher: cross-reference dependencies updated")
 		},
@@ -86,7 +147,15 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		IdleTimeout:  120 * time.Second,
 	}
 
-	return &Server{opts: opts, loader: loader, srv: srv, scheduler: sched, stubWatcher: stubWatcher}, nil
+	return &Server{
+		opts:         opts,
+		loader:       loader,
+		srv:          srv,
+		scheduler:    sched,
+		stubWatcher:  stubWatcher,
+		runtimeDir:   runtimeDir,
+		ephemeralDir: ephemeralDir,
+	}, nil
 }
 
 // Loader returns the config loader, allowing other servers (e.g. gRPC) to
@@ -126,13 +195,32 @@ func (s *Server) Start(ctx context.Context) error {
 		s.stubWatcher.Stop()
 		s.scheduler.Stop()
 		s.loader.Close()
+		s.cleanupEphemeral()
 		return nil
 	case err := <-errCh:
 		s.stubWatcher.Stop()
 		s.scheduler.Stop()
 		s.loader.Close()
+		s.cleanupEphemeral()
 		return err
 	}
+}
+
+// cleanupEphemeral removes the tempdir backing the ephemeral runtime state,
+// if one was created. No-op for non-ephemeral runs.
+func (s *Server) cleanupEphemeral() {
+	if s.ephemeralDir == "" {
+		return
+	}
+	if err := apitwinruntime.Cleanup(s.ephemeralDir); err != nil {
+		logger.Warn("cleaning up ephemeral runtime dir", "dir", s.ephemeralDir, "err", err)
+	}
+}
+
+// RuntimeDir exposes the runtime state directory (if one is in use) so other
+// subsystems (e.g. the gRPC server, tests) can observe it.
+func (s *Server) RuntimeDir() string {
+	return s.runtimeDir
 }
 
 // apiRoutesHandler returns the current config as JSON (GET only).

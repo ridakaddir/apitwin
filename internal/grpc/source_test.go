@@ -19,6 +19,7 @@ type stubLoader struct {
 
 func (s *stubLoader) Get() *config.Config { return s.cfg }
 func (s *stubLoader) ConfigDir() string   { return s.configDir }
+func (s *stubLoader) StubRoot() string    { return s.configDir }
 
 // newTestHandler returns a handler wired to a temp config directory.
 func newTestHandler(t *testing.T, configDir string) *handler {
