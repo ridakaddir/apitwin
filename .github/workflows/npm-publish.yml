@@ -58,6 +58,13 @@ jobs:
           # already the tag ref the user dispatched against.
           ref: ${{ github.event.workflow_run.head_branch || github.ref }}
 
+      - name: Stage llms.txt into npm package
+        # Single source of truth: the canonical llms.txt lives at the repo
+        # root and is copied into npm/apitwin/ at publish time so the npm
+        # tarball contains it (declared in npm/apitwin/package.json files[]).
+        # Never committed — prevents the two copies drifting out of sync.
+        run: cp llms.txt npm/apitwin/llms.txt
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
