@@ -26,14 +26,15 @@
 16. [Dynamic Refs in Defaults](#dynamic-refs-in-defaults)
 17. [Response Transitions](#response-transitions)
 18. [Record Mode](#record-mode)
-19. [CORS](#cors)
-20. [Hot Reload](#hot-reload)
-21. [API Prefix](#api-prefix)
-22. [gRPC Reference](#grpc-reference)
-23. [OpenAPI Generation](#openapi-generation)
-24. [Proto Generation](#proto-generation)
-25. [Common Patterns](#common-patterns)
-26. [Troubleshooting](#troubleshooting)
+19. [Runtime State Isolation](#runtime-state-isolation)
+20. [CORS](#cors)
+21. [Hot Reload](#hot-reload)
+22. [API Prefix](#api-prefix)
+23. [gRPC Reference](#grpc-reference)
+24. [OpenAPI Generation](#openapi-generation)
+25. [Proto Generation](#proto-generation)
+26. [Common Patterns](#common-patterns)
+27. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -79,6 +80,8 @@ apitwin [flags]
 | `--api-prefix <path>` | `-a` | | Strip prefix before matching (e.g. `/api`) |
 | `--init` | | | Scaffold a `apitwin.toml` template + `stubs/users.json` |
 | `--record` | | | Record mode: proxy and save responses as stubs (requires `--target`) |
+| `--ephemeral` | | | Mirror stubs into a tempdir wiped on shutdown (no disk residue next to config) |
+| `--no-runtime-dir` | | | Write mutations back to seed stubs (legacy, dirties git) |
 | `--grpc-proto <file>` | | | Path to `.proto` file (repeatable; enables gRPC server) |
 | `--grpc-port <n>` | | `50051` | gRPC server port |
 | `--grpc-target <addr>` | | | Upstream gRPC server for proxy mode |
@@ -109,6 +112,18 @@ apitwin generate [flags]
 | `--import-path <dir>` | | | Extra proto import search paths (repeatable) |
 
 `--proto` takes precedence over `--spec` when both are provided.
+
+### Subcommand: `apitwin reset`
+
+```
+apitwin reset [flags]
+```
+
+Delete `.apitwin/state/` so the next run starts from a fresh mirror of the seed stubs. No-op under `--ephemeral` (state is per-process and cleaned on shutdown).
+
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--config <path>` | `-c` | `apitwin.toml` or `.` | Config file or directory (used to locate `.apitwin/state/`) |
 
 ---
 
@@ -1079,6 +1094,59 @@ apitwin --config ./mocks
 
 ---
 
+## RUNTIME STATE ISOLATION
+
+Endpoints with `persist = true` mutate stub files on disk. By default, apitwin mirrors the whole config-dir tree into a gitignored `.apitwin/state/` directory next to the config on startup, and redirects every stub read and write there. The committed seed files in `stubs/` are never touched by request traffic — `git status` stays clean after a session.
+
+### Modes
+
+**Default (runtime mirror).** Nothing to configure. `.apitwin/state/` is created on startup, `.gitignore` is auto-updated if needed, and the mirror is wiped and recreated from the seed on every restart.
+
+```sh
+apitwin --config ./my-project
+```
+
+**Ephemeral.** Use a tempdir instead, wiped on graceful shutdown. Nothing lands next to the config. Good for CI, demos, and throwaway sessions.
+
+```sh
+apitwin --config ./my-project --ephemeral
+```
+
+**Legacy (`--no-runtime-dir`).** Disables the mirror. Mutations write back to seed stubs, as in versions before v0.2.0-beta.15. Use this when a script or test harness writes directly to `stubs/` after the server is running and expects the running server to see those writes.
+
+```sh
+apitwin --config ./my-project --no-runtime-dir
+```
+
+### Resetting
+
+A restart always wipes and re-mirrors. To reset without restarting:
+
+```sh
+apitwin reset --config ./my-project
+```
+
+### Directory layout
+
+```
+my-project/
+├── apitwin.toml          # committed (seed)
+├── stubs/                # committed (seed, never mutated at runtime)
+│   └── users/1.json
+├── .apitwin/
+│   └── state/            # gitignored runtime mirror
+│       └── stubs/users/
+│           ├── 1.json    # runtime copy (mutations here)
+│           └── <uuid>.json
+└── .gitignore            # auto-includes .apitwin/state/
+```
+
+### Record mode interaction
+
+Under `--record`, recorded stubs are dual-written: a canonical copy goes to the seed directory (so it's committable) and a working copy goes to the runtime mirror (so the injected in-memory route serves it immediately during the current session).
+
+---
+
 ## CORS
 
 apitwin automatically adds CORS headers to all responses:
@@ -1673,6 +1741,8 @@ fallback = "data"
 | Defaults not merging | Expecting defaults to override body | Body wins over defaults (defaults are the base layer) |
 | Fallback served with transitions | Using `fallback` alongside `transitions` | When transitions are defined, `transitions[0]` is served from the start — not the fallback. Put your initial state as the first transition entry. |
 | Background transition not firing | Missing `persist`/`merge` on transition case | Background transition cases require `persist = true`, `merge = "update"`, and `defaults` to be set. Both `merge = "append"` and `merge = "update"` matched cases arm the scheduler — the matched case's merge type does not gate scheduling. |
+| `git status` shows modified stub files after a session | Running a pre-v0.2.0-beta.15 binary, or `--no-runtime-dir` is set | Upgrade, or drop the flag. The default runtime mirror keeps mutations under `.apitwin/state/` so seed stubs stay clean. |
+| POST returns 201 but GET returns 404 on a file just written to the seed dir | Script writes to `stubs/` after server start while the server reads from `.apitwin/state/` | Either write the seed file before the server starts (it gets mirrored), or run with `--no-runtime-dir`. |
 | gRPC stub file accumulates a duplicate wrapper field on update | `merge = "update"` case persists the entire request envelope because `source` is unset and the request has a wrapper field whose name does not match the response type | Set `source = "fieldName"` explicitly, OR rely on auto-derive: when the request follows the Google `Update<X>Request { X x = N }` convention (input has a non-repeated field whose message type equals the response output type), apitwin extracts it automatically. If you see both flat fields and a duplicated nested wrapper key in the persisted file, the wrapper field name didn't match — set `source` explicitly. |
 
 ### Debugging tips
