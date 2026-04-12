@@ -18,4 +18,5 @@ apitwin provides a rich set of features for mocking, stubbing, and proxying APIs
 | [Record Mode](record-mode.md) | Proxy a real API, save responses, replay offline |
 | [Hot Reload](hot-reload.md) | Edit config, see changes on the next request |
 | [API Prefix](api-prefix.md) | Strip path prefixes before matching and forwarding |
+| [Runtime State Isolation](runtime-state.md) | Gitignored mirror dir keeps mutations out of git; `--ephemeral` for throwaway sessions |
 | [Devtool UI](devtool-ui.md) | Browser dashboard for inspecting routes, testing requests, and watching config changes |

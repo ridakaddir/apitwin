@@ -47,6 +47,7 @@
 - **Record mode** — proxy a real API, save responses as stubs, replay offline
 - **OpenAPI generation** — generate a complete mock from any OpenAPI 3 spec
 - **Response transitions** — time-based state progression (e.g. `pending` → `approved`)
+- **Runtime state isolation** — mutations land in a gitignored `.apitwin/state/` mirror so seed stubs stay clean; `--ephemeral` uses a tempdir wiped on shutdown
 - **Multi-format config** — TOML, YAML, or JSON — auto-detected by file extension
 
 ---
@@ -200,6 +201,8 @@ Flags:
   -a, --api-prefix    <path>   Strip prefix before matching (e.g. /api)
       --init                   Scaffold an apitwin.toml template
       --record                 Record mode: proxy and save responses as stubs
+      --ephemeral              Mirror stubs into a tempdir wiped on shutdown
+      --no-runtime-dir         Write mutations back to seed stubs (legacy)
       --grpc-proto    <file>   Path to .proto file (starts gRPC server)
       --grpc-port     <n>      gRPC port (default: 50051)
       --grpc-target   <addr>   Upstream gRPC server for proxy mode
@@ -209,6 +212,7 @@ Flags:
 
 Subcommands:
   generate    Generate config from OpenAPI spec or .proto files
+  reset       Delete the runtime state directory
 ```
 
 See the [full CLI reference](docs/cli-reference.md) for all flags and usage patterns.
@@ -239,14 +243,16 @@ apitwin/
 ├── main.go                    # Entrypoint
 ├── cmd/
 │   ├── root.go                # CLI (cobra) — HTTP + gRPC flags
-│   └── generate.go            # generate subcommand (OpenAPI + proto)
+│   ├── generate.go            # generate subcommand (OpenAPI + proto)
+│   └── reset.go               # reset subcommand (wipe runtime state)
 ├── internal/
 │   ├── config/                # Config types + hot-reload loader
 │   ├── generate/              # OpenAPI + proto config generation
 │   ├── grpc/                  # gRPC server, handler, codec, proxy, persist
 │   ├── logger/                # Terminal logger
 │   ├── persist/               # Directory-based stub operations
-│   └── proxy/                 # HTTP server, handler, matcher, conditions, mocking
+│   ├── proxy/                 # HTTP server, handler, matcher, conditions, mocking
+│   └── runtime/               # Seed → runtime mirror, gitignore helpers
 ├── examples/                  # Runnable examples for each feature
 ├── docs/                      # Usage documentation
 ├── ui/                        # Embedded devtool UI (React + Vite, go:embed)

@@ -5,6 +5,7 @@
 ```
 apitwin [flags]
 apitwin generate [flags]
+apitwin reset [flags]
 ```
 
 ---
@@ -21,6 +22,8 @@ apitwin generate [flags]
 | `--api-prefix <path>` | `-a` | — | Strip this prefix before matching routes and forwarding upstream (e.g. `/api`) |
 | `--init` | | | Scaffold a `apitwin.toml` template in the current directory |
 | `--record` | | | Record mode: proxy all requests and save responses as stubs |
+| `--ephemeral` | | | Mirror stubs into a tempdir wiped on shutdown (nothing persists between runs) |
+| `--no-runtime-dir` | | | Write mutations back to seed stubs — legacy mode, dirties git |
 
 ### gRPC server
 
@@ -69,6 +72,20 @@ apitwin generate [flags]
 | `--import-path <dir>` | — | Extra directory to search for proto imports; repeat for multiple |
 
 Either `--spec` or `--proto` is required. `--proto` takes precedence if both are provided.
+
+### `reset`
+
+Delete the runtime state directory so the next run starts from a fresh mirror of the seed stubs.
+
+```sh
+apitwin reset [flags]
+```
+
+| Flag | Short | Default | Description |
+|---|---|---|---|
+| `--config <path>` | `-c` | `apitwin.toml` or `.` | Config file or directory (used to locate `.apitwin/state/`) |
+
+When running in `--ephemeral` mode the runtime state is per-process and cleaned up on shutdown, so `reset` is a no-op.
 
 ---
 

@@ -99,6 +99,7 @@ export default defineConfig({
           { text: 'Array Processing', link: '/features/array-processing' },
           { text: 'Type Conversion', link: '/features/type-conversion' },
           { text: 'Response Transitions', link: '/features/response-transitions' },
+          { text: 'Runtime State Isolation', link: '/features/runtime-state' },
           { text: 'Record Mode', link: '/features/record-mode' },
           { text: 'Hot Reload', link: '/features/hot-reload' },
           { text: 'API Prefix', link: '/features/api-prefix' },
