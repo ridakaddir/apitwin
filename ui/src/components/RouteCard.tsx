@@ -64,20 +64,18 @@ export function RouteCard({
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
         </button>
-        {kind === "http" && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onTest(route, kind);
-            }}
-            className="px-3 py-3 text-zinc-500 hover:text-blue-400 transition-colors cursor-pointer border-l border-zinc-800"
-            title="Test this route"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l14 9-14 9V3z" />
-            </svg>
-          </button>
-        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onTest(route, kind);
+          }}
+          className="px-3 py-3 text-zinc-500 hover:text-blue-400 transition-colors cursor-pointer border-l border-zinc-800"
+          title={kind === "grpc" ? "Invoke this method" : "Test this route"}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l14 9-14 9V3z" />
+          </svg>
+        </button>
       </div>
 
       {expanded && (

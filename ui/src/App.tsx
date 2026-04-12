@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { useConfig } from "./api/client";
+import { useConfig, useGRPCSchemas } from "./api/client";
 import { RouteDashboard } from "./components/RouteDashboard";
 import { TestPanel } from "./components/TestPanel";
 import type { TestTarget } from "./types/config";
 
 export default function App() {
   const { config, error } = useConfig();
+  const grpcSchemas = useGRPCSchemas();
   const [testTarget, setTestTarget] = useState<TestTarget | null>(null);
 
   if (error) {
@@ -30,7 +31,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <RouteDashboard config={config} onTest={(route, kind) => setTestTarget({ route, kind })} />
-      <TestPanel target={testTarget} onClose={() => setTestTarget(null)} />
+      <TestPanel target={testTarget} grpcSchemas={grpcSchemas} onClose={() => setTestTarget(null)} />
     </div>
   );
 }

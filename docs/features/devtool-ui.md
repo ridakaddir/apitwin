@@ -51,11 +51,11 @@ A route for `GET /countries/{countryId}` might show:
 
 ## Request tester
 
-The request tester is a slide-out panel that lets you send requests to any route directly from the browser.
+The request tester is a slide-out panel that lets you send requests to any route directly from the browser — both HTTP and gRPC.
 
-### Sending a request
+### HTTP requests
 
-1. Click the **Test** button on a route card
+1. Click the **Test** button on an HTTP route card
 2. The panel opens with the route's method and path pre-filled
 3. Edit any of:
    - **Path** — modify path parameters (e.g. replace `{countryId}` with `morocco`)
@@ -64,13 +64,31 @@ The request tester is a slide-out panel that lets you send requests to any route
    - **Body** — edit JSON body for POST/PUT/PATCH requests
 4. Click **Send**
 
+### gRPC requests
+
+1. Click the **Test** button on a gRPC route card
+2. The panel opens with the fully-qualified method pre-filled and the input/output message types shown
+3. Edit the JSON request message (`{}` by default — all fields optional)
+4. Optionally add gRPC **metadata** (`name: value`, one per line)
+5. Expand **Input fields** to see the method's top-level request fields with types
+6. Click **Invoke**
+
+Behind the scenes the browser POSTs to `/__api/grpc/invoke`; apitwin transcodes the JSON to protobuf, dials its own gRPC server on `localhost`, and returns the decoded JSON response. You do not need `grpcurl` or a browser gRPC runtime — everything flows over HTTP.
+
+Streaming RPCs (client/server/bidi) are not supported by the devtool client yet; the **Invoke** button is disabled for them.
+
 ### Inspecting the response
 
-The response panel shows:
-
+For HTTP:
 - **Status code** — e.g. `200 OK`, `404 Not Found`
 - **Response headers** — all headers returned by apitwin
 - **Response body** — formatted JSON with syntax highlighting
+- **Latency** — round-trip time in milliseconds
+
+For gRPC:
+- **Status code name** — `OK`, `NOT_FOUND`, `INVALID_ARGUMENT`, etc.
+- **Status message** — on non-OK responses, the server's status message
+- **Response body** — the decoded response message as JSON
 - **Latency** — round-trip time in milliseconds
 
 ## Live config updates
@@ -85,13 +103,13 @@ No manual refresh needed. This pairs with apitwin's [hot reload](hot-reload.md) 
 
 ## Internal API
 
-The devtool UI is powered by a single read-only endpoint:
+The devtool UI is powered by three endpoints under `/__api/`:
 
-```
-GET /__api/routes
-```
-
-Returns the current config as JSON, including all routes, cases, conditions, and transitions. This endpoint is always available alongside the UI.
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/__api/routes` | GET | Current config as JSON (HTTP + gRPC routes, cases, conditions, transitions). Always available. |
+| `/__api/grpc/methods` | GET | Per-method input/output types and input field descriptors. Returns `503` when apitwin was started without `--grpc-proto`. |
+| `/__api/grpc/invoke` | POST | Dispatches a JSON-shaped unary gRPC call. Body: `{method, message, metadata?}`. Response: `{code, message?, response?, latencyMs}`. Returns `503` when gRPC is disabled. |
 
 > **Note:** The `/__api/` and `/__ui/` paths are reserved by apitwin and cannot be used as mock route patterns.
 

@@ -132,6 +132,9 @@ func run(cmd *cobra.Command, args []string) error {
 		srv.Loader().AddOnChange(func(_ *config.Config) {
 			grpcSrv.NotifyReload()
 		})
+		// Wire the devtool UI so the browser can dispatch JSON-shaped gRPC
+		// calls through /__api/grpc/invoke.
+		srv.SetGRPCInvoker(grpcSrv.Invoker())
 		go func() {
 			if err := grpcSrv.Start(ctx); err != nil {
 				logger.Error("gRPC server error", "err", err)
