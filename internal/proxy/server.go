@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ridakaddir/apitwin/internal/config"
@@ -15,6 +16,13 @@ import (
 	apitwinruntime "github.com/ridakaddir/apitwin/internal/runtime"
 	uifs "github.com/ridakaddir/apitwin/ui"
 )
+
+// maxGRPCInvokeBodyBytes caps the /__api/grpc/invoke request body so a
+// malicious or misbehaving caller cannot exhaust memory by posting a huge
+// JSON blob that would be buffered via json.RawMessage. Protobuf request
+// messages in practice are well under this; 4 MiB matches the default
+// gRPC max-recv size.
+const maxGRPCInvokeBodyBytes = 4 << 20
 
 // ServerOptions holds all runtime configuration for the proxy server.
 type ServerOptions struct {
@@ -59,8 +67,11 @@ type Server struct {
 	ephemeralDir string
 
 	// grpcInvoker is set lazily after NewServer when the gRPC server is
-	// started (see SetGRPCInvoker). When nil, /__api/grpc/* return 503.
-	grpcInvoker GRPCInvoker
+	// started (see SetGRPCInvoker). When unset, /__api/grpc/* return 503.
+	// atomic.Pointer guarantees safe publication across goroutines: the
+	// HTTP handlers read this from request goroutines while cmd/root.go
+	// writes it from the startup goroutine.
+	grpcInvoker atomic.Pointer[GRPCInvoker]
 }
 
 // NewServer initialises the proxy server.
@@ -174,10 +185,20 @@ func NewServer(opts ServerOptions) (*Server, error) {
 }
 
 // SetGRPCInvoker wires a gRPC invoker so the devtool endpoints can dispatch
-// JSON-shaped requests into the gRPC server. Safe to call after NewServer
-// but must happen before traffic arrives on /__api/grpc/*.
+// JSON-shaped requests into the gRPC server. Safe to call at any time; the
+// atomic pointer guarantees handlers either see the old nil state (503) or
+// the new invoker, never a partially-initialised one.
 func (s *Server) SetGRPCInvoker(inv GRPCInvoker) {
-	s.grpcInvoker = inv
+	s.grpcInvoker.Store(&inv)
+}
+
+// loadGRPCInvoker returns the current invoker or nil if none is wired.
+func (s *Server) loadGRPCInvoker() GRPCInvoker {
+	p := s.grpcInvoker.Load()
+	if p == nil {
+		return nil
+	}
+	return *p
 }
 
 // Loader returns the config loader, allowing other servers (e.g. gRPC) to
@@ -253,12 +274,13 @@ func (s *Server) apiGRPCMethodsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if s.grpcInvoker == nil {
+	inv := s.loadGRPCInvoker()
+	if inv == nil {
 		http.Error(w, "grpc not enabled (start apitwin with --grpc-proto)", http.StatusServiceUnavailable)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(s.grpcInvoker.Schema())
+	_ = json.NewEncoder(w).Encode(inv.Schema())
 }
 
 // apiGRPCInvokeHandler dispatches a JSON-shaped unary call into the gRPC
@@ -269,10 +291,15 @@ func (s *Server) apiGRPCInvokeHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if s.grpcInvoker == nil {
+	inv := s.loadGRPCInvoker()
+	if inv == nil {
 		http.Error(w, "grpc not enabled (start apitwin with --grpc-proto)", http.StatusServiceUnavailable)
 		return
 	}
+
+	// Cap the request body so a pathological caller can't buffer a huge
+	// JSON blob into memory via the RawMessage copy below.
+	r.Body = http.MaxBytesReader(w, r.Body, maxGRPCInvokeBodyBytes)
 
 	var req struct {
 		Method   string            `json:"method"`
@@ -291,7 +318,7 @@ func (s *Server) apiGRPCInvokeHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	result, err := s.grpcInvoker.Invoke(ctx, req.Method, req.Metadata, []byte(req.Message))
+	result, err := inv.Invoke(ctx, req.Method, req.Metadata, []byte(req.Message))
 	if err != nil {
 		// Transcoding / configuration errors — not a gRPC status. Surface
 		// as 400 so the UI can show a meaningful message rather than a
@@ -341,9 +368,19 @@ func uiHandler() http.Handler {
 	}))
 }
 
-// corsMiddleware injects CORS headers on every response and handles preflight.
+// corsMiddleware injects CORS headers on mock responses and handles
+// preflight. The devtool endpoints under /__api/ are deliberately excluded:
+// they dispatch into the local mock and gRPC servers and must only be
+// reachable from the same-origin devtool UI, not from arbitrary pages the
+// user happens to visit (which would otherwise be able to drive the local
+// gRPC invoker via a cross-origin POST).
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/__api/") || strings.HasPrefix(r.URL.Path, "/__ui/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin")
