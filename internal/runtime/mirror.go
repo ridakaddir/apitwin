@@ -59,62 +59,7 @@ func Mirror(configDir string) (string, error) {
 		return "", fmt.Errorf("creating runtime dir %q: %w", runtimeDir, err)
 	}
 
-	// Walk the config tree and copy every file that is not:
-	//   - a top-level config file (apitwin.toml, *.yaml, etc.)
-	//   - anything under .apitwin/ (including the runtime dir itself)
-	walkErr := filepath.WalkDir(absConfig, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		rel, relErr := filepath.Rel(absConfig, path)
-		if relErr != nil {
-			return relErr
-		}
-		if rel == "." {
-			return nil
-		}
-
-		// Skip the runtime dir and anything under .apitwin/.
-		if rel == ".apitwin" || strings.HasPrefix(rel, ".apitwin"+string(filepath.Separator)) {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		// Skip top-level config files — they live in the seed dir, not runtime.
-		if !d.IsDir() && filepath.Dir(rel) == "." && isConfigFilename(d.Name()) {
-			return nil
-		}
-
-		dst := filepath.Join(runtimeDir, rel)
-
-		// Follow symlinks for regular files (dereference), skip symlinked dirs
-		// with a warning to avoid pulling in content from outside the tree.
-		info, infoErr := d.Info()
-		if infoErr != nil {
-			return infoErr
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			target, terr := os.Stat(path)
-			if terr != nil {
-				logger.Warn("runtime mirror: skipping broken symlink", "path", rel, "err", terr)
-				return nil
-			}
-			if target.IsDir() {
-				logger.Warn("runtime mirror: skipping symlinked directory", "path", rel)
-				return nil
-			}
-			// Fall through to copyFile which reads through the symlink.
-		}
-
-		if d.IsDir() {
-			return os.MkdirAll(dst, info.Mode().Perm()|0700)
-		}
-		return copyFile(path, dst, info.Mode().Perm())
-	})
-	if walkErr != nil {
+	if walkErr := mirrorTree(absConfig, runtimeDir); walkErr != nil {
 		return "", fmt.Errorf("mirroring config tree: %w", walkErr)
 	}
 
@@ -145,12 +90,22 @@ func MirrorInto(configDir, runtimeDir string) error {
 	if err != nil {
 		return fmt.Errorf("resolving runtime dir %q: %w", runtimeDir, err)
 	}
+	return mirrorTree(absConfig, absRuntime)
+}
 
-	return filepath.WalkDir(absConfig, func(path string, d os.DirEntry, err error) error {
+// mirrorTree walks srcDir and copies every file into dstDir, skipping:
+//   - anything under .apitwin/ (the runtime dir itself or previous state)
+//   - top-level config files (*.toml, *.yaml, *.yml, *.json at the root)
+//
+// Symlinks to regular files are dereferenced (content copied); symlinks to
+// directories are skipped with a warning so we don't pull in content from
+// outside the tree.
+func mirrorTree(srcDir, dstDir string) error {
+	return filepath.WalkDir(srcDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		rel, relErr := filepath.Rel(absConfig, path)
+		rel, relErr := filepath.Rel(srcDir, path)
 		if relErr != nil {
 			return relErr
 		}
@@ -167,11 +122,16 @@ func MirrorInto(configDir, runtimeDir string) error {
 			return nil
 		}
 
-		dst := filepath.Join(absRuntime, rel)
+		dst := filepath.Join(dstDir, rel)
 		info, infoErr := d.Info()
 		if infoErr != nil {
 			return infoErr
 		}
+		// WalkDir uses Lstat, so symlinks appear as non-dir entries with
+		// ModeSymlink set. Dereference regular-file symlinks (the content
+		// is copied via copyFile which calls os.Open, following the link).
+		// Skip symlinked directories to avoid pulling in out-of-tree
+		// content.
 		if info.Mode()&os.ModeSymlink != 0 {
 			target, terr := os.Stat(path)
 			if terr != nil {
@@ -225,6 +185,12 @@ func copyFile(src, dst string, mode os.FileMode) error {
 
 // isConfigFilename reports whether a filename at the root of the config dir
 // should be treated as a config file and therefore excluded from the mirror.
+//
+// SYNC: this must match internal/config/loader.go:isConfigFile — if the
+// loader's loadDir would parse a top-level file as config, the mirror must
+// exclude it (otherwise the runtime dir would contain a stale config copy).
+// Conversely, any extension NOT listed here would be mirrored but also
+// parsed as config by loadDir, failing at load time. Keep the two in sync.
 func isConfigFilename(name string) bool {
 	switch strings.ToLower(filepath.Ext(name)) {
 	case ".toml", ".yaml", ".yml", ".json":

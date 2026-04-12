@@ -98,15 +98,15 @@ func recorder(configPath, stubRoot string, loader routeLoader) responseRecorder 
 		// When stubRoot == configPath (legacy --no-runtime-dir mode) this is
 		// a no-op.
 		runtimeStubPath := stubPath
-		if stubRoot != "" && stubRoot != configPath {
+		if stubRoot != configPath {
 			runtimeStubPath = filepath.Join(stubRoot, "stubs", filename)
 			if err := os.MkdirAll(filepath.Dir(runtimeStubPath), 0755); err != nil {
 				logger.Error("record: creating runtime stubs dir", "err", err)
-				return
-			}
-			if err := os.WriteFile(runtimeStubPath, body, 0644); err != nil {
+				// Fall back to seed path so the route is still injectable.
+				runtimeStubPath = stubPath
+			} else if err := os.WriteFile(runtimeStubPath, body, 0644); err != nil {
 				logger.Error("record: writing runtime stub", "file", runtimeStubPath, "err", err)
-				return
+				runtimeStubPath = stubPath
 			}
 		}
 
