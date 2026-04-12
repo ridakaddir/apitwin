@@ -26,9 +26,12 @@ type ServerOptions struct {
 	// Port is the TCP port the gRPC server listens on (default 50051).
 	Port int
 	// Loader provides the live config and config directory path.
+	// StubRoot() returns the directory stub I/O should resolve against —
+	// normally the runtime mirror dir, or ConfigDir() in legacy mode.
 	Loader interface {
 		Get() *config.Config
 		ConfigDir() string
+		StubRoot() string
 	}
 }
 

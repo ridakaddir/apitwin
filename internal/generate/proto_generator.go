@@ -9,6 +9,7 @@ import (
 
 	"github.com/jhump/protoreflect/desc"            //nolint:staticcheck
 	"github.com/jhump/protoreflect/desc/protoparse" //nolint:staticcheck
+	apitwinruntime "github.com/ridakaddir/apitwin/internal/runtime"
 )
 
 // ProtoOptions configures the proto → config generator.
@@ -84,6 +85,10 @@ func RunProto(opts ProtoOptions) (*ProtoResult, error) {
 	if err := os.MkdirAll(stubsDir, 0755); err != nil {
 		return nil, fmt.Errorf("creating output dir: %w", err)
 	}
+
+	// Best-effort: ensure the runtime state directory is gitignored in the
+	// generated project. Failures are non-fatal.
+	_ = apitwinruntime.EnsureGitignore(opts.OutDir)
 
 	result := &ProtoResult{}
 

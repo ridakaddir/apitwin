@@ -20,6 +20,7 @@ type Loader struct {
 	cfg         *Config
 	path        string // file or directory
 	isDir       bool
+	stubRoot    string // when non-empty, stub reads/writes resolve here instead of ConfigDir()
 	watcher     *fsnotify.Watcher
 	onChangeFns []func(*Config)
 }
@@ -90,12 +91,38 @@ func (l *Loader) AddOnChange(fn func(*Config)) {
 }
 
 // ConfigDir returns the directory that contains the config file(s).
-// Used to resolve relative stub paths.
+// Use this when you need the seed directory (e.g. for writing recorded routes
+// back to the config file). For stub file I/O, use StubRoot() instead so
+// runtime mutations land in the gitignored runtime state directory.
 func (l *Loader) ConfigDir() string {
 	if l.isDir {
 		return l.path
 	}
 	return filepath.Dir(l.path)
+}
+
+// StubRoot returns the directory used as the base for resolving relative stub
+// paths at request time. When the server has set a runtime state directory
+// (via SetStubRoot), that is returned; otherwise it falls back to ConfigDir()
+// so legacy (--no-runtime-dir) mode and pre-bootstrap callers keep working.
+func (l *Loader) StubRoot() string {
+	l.mu.RLock()
+	root := l.stubRoot
+	l.mu.RUnlock()
+	if root != "" {
+		return root
+	}
+	return l.ConfigDir()
+}
+
+// SetStubRoot configures the runtime stub root. The proxy server calls this
+// during NewServer bootstrap after mirroring the seed tree into the runtime
+// directory. Passing an empty string resets to "seed is the stub root"
+// behavior.
+func (l *Loader) SetStubRoot(path string) {
+	l.mu.Lock()
+	l.stubRoot = path
+	l.mu.Unlock()
 }
 
 // watch starts fsnotify on the config directory (whether path is a file or dir).

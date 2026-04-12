@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	apitwinruntime "github.com/ridakaddir/apitwin/internal/runtime"
 )
 
 // WriteOptions controls how config files and stubs are written.
@@ -33,6 +35,10 @@ func Write(groups map[string][]Operation, opts WriteOptions) (*WriteResult, erro
 	if err := os.MkdirAll(stubsDir, 0755); err != nil {
 		return nil, fmt.Errorf("creating output dir: %w", err)
 	}
+
+	// Best-effort: ensure the runtime state directory is gitignored in the
+	// generated project. Failures are non-fatal.
+	_ = apitwinruntime.EnsureGitignore(opts.OutDir)
 
 	tags := sortedKeys(groups)
 	tagRoutes := make(map[string]string) // tag → rendered config block(s)

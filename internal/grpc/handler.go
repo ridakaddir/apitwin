@@ -22,9 +22,14 @@ import (
 )
 
 // configLoader abstracts config.Loader for gRPC — mirrors the interface in proxy/handler.go.
+//
+// See proxy/handler.go for the ConfigDir vs StubRoot distinction: stub I/O
+// uses StubRoot() so runtime mutations land in the gitignored mirror dir;
+// ConfigDir() is reserved for seed-targeted operations.
 type configLoader interface {
 	Get() *config.Config
 	ConfigDir() string
+	StubRoot() string
 }
 
 // handler dispatches incoming gRPC calls to mock cases or proxies them upstream.
@@ -179,9 +184,9 @@ func (h *handler) serve(srv interface{}, stream grpc.ServerStream) error {
 				// provisioning window does not reset the ready transition.
 				if persistedPath != "" && len(route.Transitions) > 0 && h.scheduler != nil {
 					if strings.EqualFold(activeCase.Merge, "append") {
-						h.scheduler.Schedule(route, persistedPath, h.loader.ConfigDir())
+						h.scheduler.Schedule(route, persistedPath, h.loader.StubRoot())
 					} else {
-						h.scheduler.ScheduleIfIdle(route, persistedPath, h.loader.ConfigDir())
+						h.scheduler.ScheduleIfIdle(route, persistedPath, h.loader.StubRoot())
 					}
 				}
 
@@ -193,7 +198,7 @@ func (h *handler) serve(srv interface{}, stream grpc.ServerStream) error {
 				if strings.EqualFold(activeCase.Merge, "delete") {
 					h.transitions.ResetMatch(route.Match)
 					if h.scheduler != nil {
-						deletedPath := resolveGRPCFilePath(activeCase.File, reqMap, h.loader.ConfigDir())
+						deletedPath := resolveGRPCFilePath(activeCase.File, reqMap, h.loader.StubRoot())
 						h.scheduler.CancelFile(deletedPath)
 					}
 				}
@@ -309,7 +314,7 @@ func (h *handler) resolveCase(route *config.GRPCRoute, reqMap map[string]interfa
 // loadStub reads stub content from Case.File or Case.JSON and runs template rendering.
 // md is the method descriptor for the matched gRPC method (used for auto-wrapping directory responses).
 func (h *handler) loadStub(c config.Case, reqMap map[string]interface{}, md *desc.MethodDescriptor) ([]byte, error) {
-	configDir := h.loader.ConfigDir()
+	configDir := h.loader.StubRoot()
 
 	switch {
 	case c.File != "":
