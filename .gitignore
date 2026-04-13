@@ -57,6 +57,7 @@ examples/openapi-generate/mocks-single/
 # without a prior UI build). The hashed JS/CSS bundles in assets/ are ignored.
 /ui/node_modules/
 /ui/dist/assets/
+/ui/tsconfig.tsbuildinfo
 
 # VitePress docs build output and dependencies
 /website/node_modules/
