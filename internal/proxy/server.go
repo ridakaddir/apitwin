@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httputil"
+	"path"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -356,16 +357,37 @@ func uiHandler() http.Handler {
 	fileServer := http.FileServer(http.FS(distFS))
 
 	return http.StripPrefix("/__ui", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Try to serve the requested file; fall back to index.html for SPA routes.
-		path := strings.TrimPrefix(r.URL.Path, "/")
-		if path == "" {
-			path = "index.html"
+		p := strings.TrimPrefix(r.URL.Path, "/")
+		if p == "" {
+			serveUIIndex(w, distFS)
+			return
 		}
-		if _, err := fs.Stat(distFS, path); err != nil {
-			r.URL.Path = "/index.html"
+		if _, err := fs.Stat(distFS, p); err != nil {
+			// A missing asset (something with an extension) must return 404, not
+			// fall back to index.html. Mutating r.URL.Path to "/index.html" would
+			// trigger http.FileServer's built-in redirect of ".../index.html" →
+			// "./", which breaks the page with a spurious 301 and can loop when
+			// browsers have cached an older HTML referencing stale asset hashes.
+			if strings.Contains(path.Base(p), ".") {
+				http.NotFound(w, r)
+				return
+			}
+			serveUIIndex(w, distFS)
+			return
 		}
 		fileServer.ServeHTTP(w, r)
 	}))
+}
+
+func serveUIIndex(w http.ResponseWriter, distFS fs.FS) {
+	data, err := fs.ReadFile(distFS, "index.html")
+	if err != nil {
+		http.Error(w, "index.html not found", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	_, _ = w.Write(data)
 }
 
 // corsMiddleware injects CORS headers on mock responses and handles
