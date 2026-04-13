@@ -24,6 +24,25 @@ jobs:
           go-version: "1.25"
           cache: true
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      # The devtool UI bundles (ui/dist/assets/) are .gitignored — only the
+      # placeholder ui/dist/index.html is tracked so go:embed has something to
+      # compile against. The UI must be built here so GoReleaser's `go build`
+      # embeds the real JS/CSS, otherwise the released binary serves HTML that
+      # references assets that don't exist and the devtool renders blank.
+      - name: Build devtool UI
+        run: cd ui && pnpm install --frozen-lockfile && pnpm build
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
