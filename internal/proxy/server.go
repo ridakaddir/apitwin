@@ -33,6 +33,12 @@ type ServerOptions struct {
 	ApiPrefix  string // stripped from request path before route matching and upstream forwarding
 	RecordMode bool
 
+	// MaskPII gates the PII-masking pass that runs over recorded
+	// responses before they are written to disk. Defaults on at the CLI
+	// layer; opt out with --no-mask-pii. No effect when RecordMode is
+	// false. The live response sent to the client is never masked.
+	MaskPII bool
+
 	// NoRuntimeDir disables the runtime state mirror and writes mutations
 	// back to the seed stub files (legacy behavior). Dirties git on every
 	// mutation — only set when reproducing the pre-runtime-dir experience.
@@ -155,7 +161,16 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		},
 	})
 
-	handler := NewHandlerWithTransitions(loader, rp, opts.RecordMode, opts.ApiPrefix, ts, sched, stubWatcher)
+	handler := NewHandlerWithOptions(HandlerOptions{
+		Loader:      loader,
+		Proxy:       rp,
+		RecordMode:  opts.RecordMode,
+		MaskPII:     opts.MaskPII,
+		ApiPrefix:   opts.ApiPrefix,
+		Transitions: ts,
+		Scheduler:   sched,
+		StubWatcher: stubWatcher,
+	})
 
 	s := &Server{
 		opts:         opts,
