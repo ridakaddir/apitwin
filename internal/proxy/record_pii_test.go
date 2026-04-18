@@ -52,7 +52,10 @@ func TestRecorder_MasksPIIBeforeWritingStub(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/Patient/patient-001", nil)
 	rec(req, 200, header, body, 50*time.Millisecond)
 
-	stubPath := filepath.Join(seed, "stubs", "get_patient_patient-001.json")
+	// slugify preserves case, so "/Patient/patient-001" → "get_Patient_patient-001.json".
+	// On case-insensitive filesystems (macOS default) the lowercased form
+	// also matched, but Linux CI is case-sensitive.
+	stubPath := filepath.Join(seed, "stubs", "get_Patient_patient-001.json")
 	got, err := os.ReadFile(stubPath)
 	require.NoError(t, err, "stub file should be written")
 
