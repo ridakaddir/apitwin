@@ -80,6 +80,10 @@ type capturingWriter struct {
 
 func (cw *capturingWriter) WriteHeader(code int) {
 	cw.status = code
+	// Snapshot the response headers before flushing so the recorder can
+	// inspect Content-Type, Content-Encoding, etc. Header() returns the
+	// map the upstream handler populated; Clone() makes a safe copy.
+	cw.header = cw.ResponseWriter.Header().Clone()
 	cw.ResponseWriter.WriteHeader(code)
 }
 

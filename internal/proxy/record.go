@@ -13,6 +13,7 @@ import (
 
 	"github.com/ridakaddir/apitwin/internal/config"
 	"github.com/ridakaddir/apitwin/internal/logger"
+	"github.com/ridakaddir/apitwin/internal/pii"
 	apitwinruntime "github.com/ridakaddir/apitwin/internal/runtime"
 )
 
@@ -33,7 +34,12 @@ type routeLoader interface {
 // stub is dual-written to both so the seed copy is committable and the
 // runtime copy is what the in-memory route reads from during the current
 // session.
-func recorder(configPath, stubRoot string, loader routeLoader) responseRecorder {
+// maskPII, when true, runs the PII detector/masker over the recorded
+// body before it lands on disk. The live response sent back to the
+// client is untouched (capturingWriter has already flushed it by the
+// time this callback runs), so masking only affects the committable
+// stub file.
+func recorder(configPath, stubRoot string, loader routeLoader, maskPII bool) responseRecorder {
 	// seen tracks method+path pairs already recorded this session to avoid
 	// appending duplicate routes on repeated requests to the same endpoint.
 	seen := make(map[string]bool)
@@ -80,6 +86,14 @@ func recorder(configPath, stubRoot string, loader routeLoader) responseRecorder 
 		ct := header.Get("Content-Type")
 		if strings.Contains(ct, "application/json") {
 			body = indentJSON(body)
+		}
+
+		// Mask PII before persisting so committed stubs never carry real
+		// patient data, contact info, or other sensitive content. The
+		// masker no-ops on non-JSON content types and on parse failure,
+		// returning the original bytes unchanged.
+		if maskPII {
+			body = pii.Mask(body, ct)
 		}
 
 		if err := os.WriteFile(stubPath, body, 0644); err != nil {

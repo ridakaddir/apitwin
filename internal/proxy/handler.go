@@ -38,18 +38,66 @@ type configLoader interface {
 // NewHandler builds a new Handler with a fresh transition state.
 // NOTE: The handler created this way has no scheduler or stub watcher.
 // Use NewHandlerWithTransitions when background transition mutations are needed.
+//
+// PII masking defaults on for record mode so test/scaffold callers don't
+// have to think about the safer default; production callers go through
+// NewHandlerWithOptions.
 func NewHandler(loader configLoader, rp *httputil.ReverseProxy, recordMode bool, apiPrefix string) *Handler {
-	return NewHandlerWithTransitions(loader, rp, recordMode, apiPrefix, newTransitionState(), nil, nil)
+	return NewHandlerWithOptions(HandlerOptions{
+		Loader:     loader,
+		Proxy:      rp,
+		RecordMode: recordMode,
+		MaskPII:    true,
+		ApiPrefix:  apiPrefix,
+	})
 }
 
 // NewHandlerWithTransitions builds a Handler with the provided transition, scheduler, and stub watcher state.
 // Used by NewServer to share the transition state with the config reload callback.
+//
+// PII masking defaults on. Use NewHandlerWithOptions to override.
 func NewHandlerWithTransitions(loader configLoader, rp *httputil.ReverseProxy, recordMode bool, apiPrefix string, ts *transitionState, sched *transitionScheduler, sw *StubWatcher) *Handler {
+	return NewHandlerWithOptions(HandlerOptions{
+		Loader:      loader,
+		Proxy:       rp,
+		RecordMode:  recordMode,
+		MaskPII:     true,
+		ApiPrefix:   apiPrefix,
+		Transitions: ts,
+		Scheduler:   sched,
+		StubWatcher: sw,
+	})
+}
+
+// HandlerOptions bundles every knob NewHandlerWithOptions accepts. It
+// exists so we can keep adding optional behaviour (PII masking, future
+// per-route transforms, ...) without growing the positional argument
+// list every time.
+type HandlerOptions struct {
+	Loader      configLoader
+	Proxy       *httputil.ReverseProxy
+	RecordMode  bool
+	MaskPII     bool
+	ApiPrefix   string
+	Transitions *transitionState
+	Scheduler   *transitionScheduler
+	StubWatcher *StubWatcher
+}
+
+// NewHandlerWithOptions is the canonical constructor. Older entry points
+// (NewHandler, NewHandlerWithTransitions) delegate here.
+func NewHandlerWithOptions(opts HandlerOptions) *Handler {
+	apiPrefix := opts.ApiPrefix
 	// Normalise prefix: ensure it starts with / and has no trailing slash.
 	if apiPrefix != "" && !strings.HasPrefix(apiPrefix, "/") {
 		apiPrefix = "/" + apiPrefix
 	}
 	apiPrefix = strings.TrimRight(apiPrefix, "/")
+
+	ts := opts.Transitions
+	if ts == nil {
+		ts = newTransitionState()
+	}
 
 	// Create the recorder once so its internal `seen` dedup map persists
 	// across all requests for the lifetime of the server. Recorded stubs
@@ -58,18 +106,18 @@ func NewHandlerWithTransitions(loader configLoader, rp *httputil.ReverseProxy, r
 	// runtime mirror (so the just-injected route reads from a path that
 	// participates in StubRoot semantics).
 	var rec responseRecorder
-	if recordMode {
-		rec = recorder(loader.ConfigDir(), loader.StubRoot(), loader)
+	if opts.RecordMode {
+		rec = recorder(opts.Loader.ConfigDir(), opts.Loader.StubRoot(), opts.Loader, opts.MaskPII)
 	}
 
 	return &Handler{
-		loader:      loader,
-		rp:          rp,
+		loader:      opts.Loader,
+		rp:          opts.Proxy,
 		rec:         rec,
 		apiPrefix:   apiPrefix,
 		transitions: ts,
-		scheduler:   sched,
-		stubWatcher: sw,
+		scheduler:   opts.Scheduler,
+		stubWatcher: opts.StubWatcher,
 	}
 }
 

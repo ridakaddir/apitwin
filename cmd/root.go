@@ -34,6 +34,7 @@ var (
 	configFile   string
 	apiPrefix    string
 	recordMode   bool
+	noMaskPII    bool
 	initMode     bool
 	noRuntimeDir bool
 	ephemeral    bool
@@ -64,7 +65,8 @@ func init() {
 	rootCmd.Flags().IntVarP(&port, "port", "p", 4000, "Port to listen on")
 	rootCmd.Flags().StringVarP(&configFile, "config", "c", "", "Config file or directory (default: apitwin.toml if present, else current directory)")
 	rootCmd.Flags().StringVarP(&apiPrefix, "api-prefix", "a", "", "Strip this prefix from request paths before matching routes and forwarding to upstream (e.g. /api)")
-	rootCmd.Flags().BoolVar(&recordMode, "record", false, "Record mode: proxy all requests and save responses as stubs")
+	rootCmd.Flags().BoolVar(&recordMode, "record", false, "Record mode: proxy all requests and save responses as stubs (PII is masked by default — pass --no-mask-pii to disable)")
+	rootCmd.Flags().BoolVar(&noMaskPII, "no-mask-pii", false, "Disable PII masking on recorded stubs (only meaningful with --record)")
 	rootCmd.Flags().BoolVar(&initMode, "init", false, "Scaffold an apitwin.toml template in the current directory")
 	rootCmd.Flags().BoolVar(&ephemeral, "ephemeral", false, "Mirror stubs into a tempdir wiped on shutdown; nothing lands on disk next to the config")
 	rootCmd.Flags().BoolVar(&noRuntimeDir, "no-runtime-dir", false, "Write mutations back to seed stubs (legacy, dirties git)")
@@ -104,6 +106,7 @@ func run(cmd *cobra.Command, args []string) error {
 		ConfigPath:   cfg,
 		ApiPrefix:    apiPrefix,
 		RecordMode:   recordMode,
+		MaskPII:      !noMaskPII,
 		NoRuntimeDir: noRuntimeDir,
 		Ephemeral:    ephemeral,
 	}
