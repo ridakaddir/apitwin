@@ -238,3 +238,34 @@ func TestMask_FHIRContentType(t *testing.T) {
 		t.Errorf("FHIR content type did not trigger masking: %s", out)
 	}
 }
+
+// Mask is idempotent: running it twice produces the same output as once.
+// Without the alreadyMasked shape check, hash-based generators
+// (kindIdentifier, kindGivenName/Family, kindEmail) would re-hash their
+// own outputs on the second pass and drift. Covers FHIR and generic
+// field-name paths plus the value-shape SSN regex.
+func TestMask_Idempotent(t *testing.T) {
+	inputs := []string{
+		// FHIR Patient — exercises kindIdentifier, kindGivenName,
+		// kindFamilyName, kindDOB, kindGenericPII (telecom).
+		`{
+			"resourceType":"Patient",
+			"id":"abc",
+			"identifier":[{"value":"MR-99"}],
+			"birthDate":"1990-05-12",
+			"name":[{"family":"Smith","given":["John"]}],
+			"telecom":[{"system":"email","value":"john@example.org"}]
+		}`,
+		// Generic field-name pass — kindEmail, kindPhone, kindSSN.
+		`{"email":"resident@portugal.example","phone":"(415) 555-2671","ssn":"123-45-6789"}`,
+		// Free-text regex pass — same three shapes embedded in prose.
+		`{"notes":"Contact resident@portugal.example or 415-555-2671. SSN 123-45-6789."}`,
+	}
+	for i, in := range inputs {
+		first := Mask([]byte(in), "application/json")
+		second := Mask(first, "application/json")
+		if string(first) != string(second) {
+			t.Errorf("input %d: Mask not idempotent\nfirst:\n%s\nsecond:\n%s", i, first, second)
+		}
+	}
+}

@@ -41,6 +41,13 @@ var nameExclude = regexp.MustCompile(`(file|user|host|tag|display|class|field|ta
 
 var dateExclude = regexp.MustCompile(`(create|update|modif|delet|expir|issu|effect|recorded|publish|start|end|begin|finish|valid|due|sent|received|posted|fetched|sync)`)
 
+// "pan" and "fax" are common substrings of unrelated keys (span, japan,
+// expandPanel, prefix, faxed). Only flag them when the needle appears
+// as a standalone word segment.
+var panExclude = regexp.MustCompile(`(span|japan|pane|pant|panic|pand|plan)`)
+
+var faxExclude = regexp.MustCompile(`(prefix|suffix|affix|faxe)`)
+
 var fieldRules = []fieldRule{
 	// Healthcare / FHIR-flavoured first so they win over generic "id".
 	{needle: "mrn", kind: kindIdentifier},
@@ -55,7 +62,7 @@ var fieldRules = []fieldRule{
 	{needle: "phone", kind: kindPhone},
 	{needle: "mobile", kind: kindPhone},
 	{needle: "telephone", kind: kindPhone},
-	{needle: "fax", kind: kindPhone},
+	{needle: "fax", kind: kindPhone, exclude: faxExclude},
 
 	// Government / financial.
 	{needle: "ssn", kind: kindSSN},
@@ -66,7 +73,7 @@ var fieldRules = []fieldRule{
 	{needle: "cardnumber", kind: kindCreditCard},
 	{needle: "card_number", kind: kindCreditCard},
 	{needle: "cardnum", kind: kindCreditCard},
-	{needle: "pan", kind: kindCreditCard},
+	{needle: "pan", kind: kindCreditCard, exclude: panExclude},
 
 	// Dates of birth.
 	{needle: "birthdate", kind: kindDOB},

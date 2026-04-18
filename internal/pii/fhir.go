@@ -89,13 +89,11 @@ func (m *masker) applyFHIR(node map[string]any) {
 
 // applyPath drills into the node along the path steps and masks each
 // matching leaf. "[*]" steps fan out across array elements; missing
-// keys simply terminate that branch.
+// keys simply terminate that branch. Leaf substitution is always done
+// by the parent (the "[*]" or object-key branch below), never at
+// len(path)==0, because we need the parent slot to write into.
 func (m *masker) applyPath(node any, path []string, kind fakeKind) {
 	if len(path) == 0 {
-		// Reached a leaf — mask if it's a string.
-		if s, ok := node.(string); ok && s != "" {
-			_ = s // value substitution happens via the parent (see below)
-		}
 		return
 	}
 	step := path[0]

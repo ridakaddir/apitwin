@@ -82,18 +82,17 @@ func recorder(configPath, stubRoot string, loader routeLoader, maskPII bool) res
 			}
 		}
 
-		// Pretty-print the body if it looks like JSON.
-		ct := header.Get("Content-Type")
-		if strings.Contains(ct, "application/json") {
-			body = indentJSON(body)
-		}
-
 		// Mask PII before persisting so committed stubs never carry real
 		// patient data, contact info, or other sensitive content. The
-		// masker no-ops on non-JSON content types and on parse failure,
-		// returning the original bytes unchanged.
+		// masker already pretty-prints JSON, so we skip the separate
+		// indent step when masking runs. On non-JSON content types and
+		// on parse failure the masker returns the original bytes, and
+		// indentJSON handles the unmasked JSON path.
+		ct := header.Get("Content-Type")
 		if maskPII {
 			body = pii.Mask(body, ct)
+		} else if strings.Contains(ct, "application/json") {
+			body = indentJSON(body)
 		}
 
 		if err := os.WriteFile(stubPath, body, 0644); err != nil {

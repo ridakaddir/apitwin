@@ -44,7 +44,10 @@ func Mask(body []byte, contentType string) []byte {
 		return body
 	}
 
-	m := &masker{cache: make(map[string]string)}
+	m := &masker{
+		cache:  make(map[string]string),
+		masked: make(map[string]bool),
+	}
 	root = m.walkAny(root, "")
 
 	out, err := json.MarshalIndent(root, "", "  ")
@@ -61,22 +64,37 @@ func isMaskableContentType(ct string) bool {
 		strings.Contains(ct, "+json")
 }
 
-// masker carries per-call state. The cache guarantees that the same
-// original value masks to the same fake within one body so references
-// stay consistent (e.g. a patient ID appearing in multiple resources of
-// a Bundle stays linked after masking).
+// masker carries per-call state.
+//
+// cache guarantees same-input → same-output within one body so
+// references stay consistent (a patient ID that appears in multiple
+// resources of a Bundle stays linked after masking).
+//
+// masked tracks the set of fake values already produced in this pass.
+// Because the walker runs both a FHIR-aware pass and a generic pass
+// over the same tree, it would otherwise re-process values the FHIR
+// pass already replaced — wasted work, and for non-idempotent generators
+// (e.g. kindIdentifier) the second pass would produce a different fake.
 type masker struct {
-	cache map[string]string
+	cache  map[string]string
+	masked map[string]bool
 }
 
 // cached returns the deterministic fake for original under kind, reusing
-// any earlier fake produced for the same original in this pass.
+// any earlier fake produced for the same original in this pass. If
+// original is itself a value we already produced — either earlier in
+// this pass (m.masked) or in a previous Mask call (alreadyMasked shape
+// check) — leave it alone so Mask(Mask(x)) == Mask(x).
 func (m *masker) cached(original string, kind fakeKind) string {
 	if v, ok := m.cache[original]; ok {
 		return v
 	}
+	if m.masked[original] || alreadyMasked(kind, original) {
+		return original
+	}
 	v := fake(kind, original)
 	m.cache[original] = v
+	m.masked[v] = true
 	return v
 }
 
@@ -105,6 +123,11 @@ func (m *masker) walkAny(node any, parentKey string) any {
 		}
 		return v
 	case string:
+		// Short-circuit values we already produced during the FHIR pass
+		// so we don't re-process them.
+		if m.masked[v] {
+			return v
+		}
 		// Field-name pass: if our parent key flags this as a known PII
 		// field, mask the whole value via the configured fake.
 		if parentKey != "" {

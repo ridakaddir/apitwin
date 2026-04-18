@@ -91,18 +91,76 @@ func fake(kind fakeKind, original string) string {
 
 var phoneDigitsOnly = regexp.MustCompile(`\D`)
 
+// Shape regexes matching values that `fake` already produced. Used by
+// alreadyMasked to make Mask idempotent across calls — without these,
+// hash-based generators would re-hash their own outputs on a second
+// pass and produce drift. Generators whose output is either fixed
+// ("123 Main St", "Anytown") or derived deterministically from the
+// input shape (phone, card, DOB, postalCode) are idempotent without
+// needing a regex here.
+var (
+	reFakeEmail      = regexp.MustCompile(`^user-[0-9a-f]{6}@example\.com$`)
+	reFakeSSN        = regexp.MustCompile(`^900-00-\d{4}$`)
+	reFakeGivenName  = regexp.MustCompile(`^Given-[0-9a-f]{6}$`)
+	reFakeFamilyName = regexp.MustCompile(`^Family-[0-9a-f]{6}$`)
+	reFakeFullName   = regexp.MustCompile(`^Patient-[0-9a-f]{6}$`)
+	reFakeIdentifier = regexp.MustCompile(`^ID-[0-9A-F]{8}$`)
+	reFakeGenericPII = regexp.MustCompile(`^REDACTED-[0-9a-f]{6}$`)
+)
+
+// isFakePhone reports whether s, stripped of non-digits, is
+// 555-555-01XX (10 digits) or 1-555-555-01XX (11 digits with country
+// code) — i.e. already one of our phone fakes.
+func isFakePhone(s string) bool {
+	digits := phoneDigitsOnly.ReplaceAllString(s, "")
+	switch len(digits) {
+	case 10:
+		return strings.HasPrefix(digits, "55555501")
+	case 11:
+		return strings.HasPrefix(digits, "155555501")
+	}
+	return false
+}
+
+// alreadyMasked reports whether s is already in the shape a previous
+// fake(kind, _) call would have produced. Used to short-circuit Mask on
+// values we've already replaced, so Mask(Mask(x)) == Mask(x).
+func alreadyMasked(kind fakeKind, s string) bool {
+	switch kind {
+	case kindEmail:
+		return reFakeEmail.MatchString(s)
+	case kindSSN:
+		return reFakeSSN.MatchString(s)
+	case kindPhone:
+		return isFakePhone(s)
+	case kindGivenName:
+		return reFakeGivenName.MatchString(s)
+	case kindFamilyName:
+		return reFakeFamilyName.MatchString(s)
+	case kindFullName:
+		return reFakeFullName.MatchString(s)
+	case kindIdentifier:
+		return reFakeIdentifier.MatchString(s)
+	case kindGenericPII:
+		return reFakeGenericPII.MatchString(s)
+	}
+	// kindCreditCard, kindDOB, kindAddressLine, kindCity, kindPostalCode
+	// all have idempotent generators — running fake() on their own
+	// output yields the same value, so no shape check is needed.
+	return false
+}
+
 // fakePhonePreservingFormat emits a fake US phone number that keeps the
-// punctuation pattern of the original. 555-01xx is the reserved
-// fictional range, so masked numbers can never collide with real ones.
+// punctuation pattern of the original. 555-555-01XX is fully fictional:
+// NPA 555 is reserved by NANP and 555-01XX is the TV/film subscriber
+// range, so the result can never collide with a real number. A leading
+// "+" in the original is naturally preserved because we copy original
+// into `out` and only overwrite digits.
 func fakePhonePreservingFormat(original string) string {
 	digits := phoneDigitsOnly.ReplaceAllString(original, "")
 	suffix := fmt.Sprintf("%02d", hashMod(original, 100))
-	// Preserve E.164-ish leading "+1" if present.
-	prefix := ""
-	if strings.HasPrefix(strings.TrimSpace(original), "+") {
-		prefix = "+1"
-	}
-	fakeDigits := "555010" + suffix[:1] + suffix[1:]
+	// 10 digits: area "555" + exchange "555" + line "01XX".
+	fakeDigits := "55555501" + suffix
 	if len(digits) == 11 {
 		fakeDigits = "1" + fakeDigits
 	}
@@ -116,9 +174,6 @@ func fakePhonePreservingFormat(original string) string {
 				di++
 			}
 		}
-	}
-	if prefix != "" && !strings.HasPrefix(string(out), "+") {
-		return prefix + string(out)
 	}
 	return string(out)
 }
@@ -141,6 +196,7 @@ func preserveCardFormat(original, replacement string) string {
 
 // preserveDigitsLen returns a fake postal-code-ish string matching the
 // digit count of the original (handles 5-digit US zips and others).
+// If the original has no digits, returns the fallback.
 func preserveDigitsLen(original, fallback string) string {
 	hasDigits := false
 	for _, ch := range original {
@@ -150,7 +206,7 @@ func preserveDigitsLen(original, fallback string) string {
 		}
 	}
 	if !hasDigits {
-		return "Anywhere"
+		return fallback
 	}
 	out := []byte(original)
 	for i, ch := range original {
@@ -159,9 +215,6 @@ func preserveDigitsLen(original, fallback string) string {
 		} else if ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' {
 			out[i] = 'X'
 		}
-	}
-	if string(out) == "" {
-		return fallback
 	}
 	return string(out)
 }
