@@ -24,9 +24,19 @@ type RouteLike interface {
 //
 // FirstHit is exported so white-box tests can prime timestamps directly.
 type State[R RouteLike] struct {
-	mu       sync.Mutex
-	FirstHit map[string]time.Time
-	keyFn    func(R) string
+	mu        sync.Mutex
+	FirstHit  map[string]time.Time
+	keyFn     func(R) string
+	scope     string
+	persister Persister
+}
+
+// Persister is the write-through interface used by State to persist
+// FirstHit mutations across server restarts. The scope argument lets one
+// backing file hold state for multiple servers (REST + gRPC) without
+// collision. Implementations must be safe for concurrent callers.
+type Persister interface {
+	PersistFirstHit(scope string, firstHit map[string]time.Time)
 }
 
 // NewState constructs an empty state machine. keyFn extracts the unique key
@@ -39,12 +49,33 @@ func NewState[R RouteLike](keyFn func(R) string) *State[R] {
 	}
 }
 
+// NewPersistentState constructs a state machine that writes through to the
+// given persister on every FirstHit mutation. seed is an optional initial
+// FirstHit map loaded from disk (use nil for an empty start).
+func NewPersistentState[R RouteLike](keyFn func(R) string, scope string, p Persister, seed map[string]time.Time) *State[R] {
+	fh := make(map[string]time.Time, len(seed))
+	for k, v := range seed {
+		fh[k] = v
+	}
+	return &State[R]{
+		FirstHit:  fh,
+		keyFn:     keyFn,
+		scope:     scope,
+		persister: p,
+	}
+}
+
 // Reset clears all recorded first-hit times, restarting every transition
 // sequence. Called on config hot-reload.
 func (s *State[R]) Reset() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.FirstHit = make(map[string]time.Time)
+	snap := cloneFirstHit(s.FirstHit)
+	p, scope := s.persister, s.scope
+	s.mu.Unlock()
+	if p != nil {
+		p.PersistFirstHit(scope, snap)
+	}
 }
 
 // ResetMatch clears recorded first-hit times for any key that targets the
@@ -58,13 +89,33 @@ func (s *State[R]) Reset() {
 // would try to update a file that no longer exists).
 func (s *State[R]) ResetMatch(matchPattern string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	suffix := " " + matchPattern
+	changed := false
 	for key := range s.FirstHit {
 		if key == matchPattern || strings.HasSuffix(key, suffix) {
 			delete(s.FirstHit, key)
+			changed = true
 		}
 	}
+	var snap map[string]time.Time
+	if changed {
+		snap = cloneFirstHit(s.FirstHit)
+	}
+	p, scope := s.persister, s.scope
+	s.mu.Unlock()
+	if changed && p != nil {
+		p.PersistFirstHit(scope, snap)
+	}
+}
+
+// cloneFirstHit returns an independent copy of m. Callers hand the snapshot
+// to the persister outside the mutex so long I/O cannot stall Resolve.
+func cloneFirstHit(m map[string]time.Time) map[string]time.Time {
+	out := make(map[string]time.Time, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }
 
 // Resolve returns the case name that should be served for a route with
@@ -90,11 +141,17 @@ func (s *State[R]) Resolve(route R) string {
 
 	s.mu.Lock()
 	t0, seen := s.FirstHit[key]
+	var snap map[string]time.Time
 	if !seen {
 		t0 = time.Now()
 		s.FirstHit[key] = t0
+		snap = cloneFirstHit(s.FirstHit)
 	}
+	p, scope := s.persister, s.scope
 	s.mu.Unlock()
+	if !seen && p != nil {
+		p.PersistFirstHit(scope, snap)
+	}
 
 	elapsed := time.Since(t0)
 	elapsedSecs := int64(elapsed.Seconds())

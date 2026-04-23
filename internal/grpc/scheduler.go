@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"sync"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/ridakaddir/apitwin/internal/config"
 	"github.com/ridakaddir/apitwin/internal/logger"
 	"github.com/ridakaddir/apitwin/internal/persist"
+	runtimepersist "github.com/ridakaddir/apitwin/internal/runtime/persist"
 	"github.com/ridakaddir/apitwin/internal/transitions"
 )
 
@@ -25,17 +27,48 @@ import (
 // stale pending mutations. Without this, a delete+recreate sequence leaves a
 // goroutine from the original create which then stomps the recreated file
 // with the wrong defaults before its own transition window elapses.
+//
+// Persistence: defaults are resolved eagerly at Schedule time and the
+// resolved payload + fireAt is recorded via the shared ScheduledPersister
+// (with Scope="grpc"). Fired items are pruned; cancelled items (CancelFile
+// or hot-reload) are also pruned; shutdown leaves items on disk for next
+// boot to re-arm.
 type grpcTransitionScheduler struct {
-	mu      sync.Mutex
-	gen     *transitions.Generation
-	pending map[string][]*pendingMutation // keyed on target filePath
+	mu        sync.Mutex
+	gen       *transitions.Generation
+	pending   map[string][]*pendingMutation // keyed on target filePath
+	persister *runtimepersist.ScheduledPersister
 }
 
 // pendingMutation is a single in-flight scheduled update for a given filePath.
 // Each entry owns its own context derived from the generation context so it
-// can be cancelled individually without affecting other files.
+// can be cancelled individually without affecting other files. The id lets
+// cleanup Remove() the matching persisted entry on fire or cancel.
 type pendingMutation struct {
+	id     string
 	cancel context.CancelFunc
+}
+
+var grpcIdGen uint64
+
+func nextGRPCScheduledID() string {
+	t := time.Now().UnixNano()
+	grpcIdGen++
+	return "grpc-" + time.Unix(0, t).Format("20060102T150405.000000000") + "-" + grpcItoa(grpcIdGen)
+}
+
+func grpcItoa(u uint64) string {
+	if u == 0 {
+		return "0"
+	}
+	var buf [20]byte
+	i := len(buf)
+	for u > 0 {
+		i--
+		buf[i] = byte('0' + u%10)
+		u /= 10
+	}
+	return string(buf[i:])
 }
 
 func newGRPCTransitionScheduler(parent context.Context) *grpcTransitionScheduler {
@@ -43,6 +76,16 @@ func newGRPCTransitionScheduler(parent context.Context) *grpcTransitionScheduler
 		gen:     transitions.NewGeneration(parent),
 		pending: make(map[string][]*pendingMutation),
 	}
+}
+
+// SetPersister wires a ScheduledPersister so new Schedule calls persist
+// pending items and fired/cancelled items are pruned. Passing nil detaches
+// the persister. Must be called before any Schedule call to avoid
+// persisting partial state.
+func (s *grpcTransitionScheduler) SetPersister(p *runtimepersist.ScheduledPersister) {
+	s.mu.Lock()
+	s.persister = p
+	s.mu.Unlock()
 }
 
 // Schedule inspects a gRPC route's transitions and spawns background goroutines
@@ -88,7 +131,19 @@ func (s *grpcTransitionScheduler) Schedule(route *config.GRPCRoute, filePath, co
 					"case", t.Case, "merge", c.Merge)
 			} else if cumulative > 0 {
 				delay := time.Duration(cumulative) * time.Second
-				s.schedule(delay, filePath, c, configDir)
+				incoming := loadGRPCDefaults(c.Defaults, nil, nil, configDir)
+				if len(incoming) == 0 {
+					logger.Warn("grpc deferred transition: eager defaults resolved to empty, skipping",
+						"case", t.Case, "defaults", c.Defaults)
+					if t.Duration > 0 {
+						cumulative += int64(t.Duration)
+					}
+					continue
+				}
+				id := nextGRPCScheduledID()
+				fireAt := time.Now().Add(delay)
+				s.persistItem(id, route.Match, filePath, fireAt, incoming, c.Defaults)
+				s.scheduleResolved(id, delay, filePath, incoming, c.Defaults)
 			}
 		}
 
@@ -98,38 +153,54 @@ func (s *grpcTransitionScheduler) Schedule(route *config.GRPCRoute, filePath, co
 	}
 }
 
-// schedule spawns a single goroutine that waits for delay, then applies
-// the case's defaults to the file via persist.Update.
-//
-// Each goroutine owns a per-file context derived from the generation context
-// so CancelFile can cancel it individually without touching other files.
-//
-// NOTE: unlike the HTTP proxy scheduler, no request context (refCtx) is
-// passed here. gRPC defaults use renderGRPCTemplate which handles {{uuid}},
-// {{now}}, etc. If future defaults files need request-scoped placeholders,
-// a gRPC equivalent of RefContext will be needed.
-func (s *grpcTransitionScheduler) schedule(delay time.Duration, filePath string, c config.Case, configDir string) {
+// persistItem records a new pending item. Best-effort; errors are logged
+// but do not block scheduling.
+func (s *grpcTransitionScheduler) persistItem(id, routeKey, filePath string, fireAt time.Time, payload map[string]interface{}, source string) {
+	s.mu.Lock()
+	p := s.persister
+	s.mu.Unlock()
+	if p == nil {
+		return
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		logger.Warn("grpc deferred transition: marshal payload failed", "err", err)
+		return
+	}
+	if err := p.Add(runtimepersist.ScheduledItem{
+		ID:              id,
+		Scope:           "grpc",
+		RouteKey:        routeKey,
+		FilePath:        filePath,
+		FireAt:          fireAt,
+		ResolvedPayload: raw,
+		Source:          source,
+	}); err != nil {
+		logger.Warn("grpc deferred transition: persist Add failed", "err", err)
+	}
+}
+
+// scheduleResolved spawns a goroutine that waits delay, then applies the
+// eager-resolved payload via persist.Update. Used by Schedule (fresh
+// arming) and Rearm (post-restart). id is the persister item id so the
+// fire-time Remove() matches the original Add.
+func (s *grpcTransitionScheduler) scheduleResolved(id string, delay time.Duration, filePath string, payload map[string]interface{}, source string) {
 	s.mu.Lock()
 	gen := s.gen
-	// If the current generation has already been cancelled (Stop or Reset
-	// is in flight), do not spawn — calling gen.WG.Add(1) while another
-	// goroutine is in gen.WG.Wait() with a zero counter panics.
 	if gen.Ctx.Err() != nil {
 		s.mu.Unlock()
 		return
 	}
 	fileCtx, fileCancel := context.WithCancel(gen.Ctx)
-	pm := &pendingMutation{cancel: fileCancel}
+	pm := &pendingMutation{id: id, cancel: fileCancel}
 	s.pending[filePath] = append(s.pending[filePath], pm)
 	gen.WG.Add(1)
+	p := s.persister
 	s.mu.Unlock()
 
 	go func() {
 		defer gen.WG.Done()
 		defer func() {
-			// Remove this entry from the pending map once the goroutine is
-			// done (either fired or was cancelled). Safe if already removed
-			// by CancelFile.
 			s.mu.Lock()
 			list := s.pending[filePath]
 			for i, entry := range list {
@@ -142,7 +213,7 @@ func (s *grpcTransitionScheduler) schedule(delay time.Duration, filePath string,
 				delete(s.pending, filePath)
 			}
 			s.mu.Unlock()
-			fileCancel() // idempotent
+			fileCancel()
 		}()
 
 		timer := time.NewTimer(delay)
@@ -150,14 +221,7 @@ func (s *grpcTransitionScheduler) schedule(delay time.Duration, filePath string,
 
 		select {
 		case <-timer.C:
-			incoming := loadGRPCDefaults(c.Defaults, nil, nil, configDir)
-			if len(incoming) == 0 {
-				logger.Warn("grpc deferred transition: no defaults to apply",
-					"file", filePath, "defaults", c.Defaults)
-				return
-			}
-
-			if _, err := persist.Update(filePath, incoming); err != nil {
+			if _, err := persist.Update(filePath, payload); err != nil {
 				if persist.IsNotFound(err) {
 					logger.Warn("grpc deferred transition: file was deleted before transition",
 						"file", filePath)
@@ -165,16 +229,70 @@ func (s *grpcTransitionScheduler) schedule(delay time.Duration, filePath string,
 					logger.Error("grpc deferred transition: update failed",
 						"file", filePath, "err", err)
 				}
+				if p != nil {
+					_ = p.Remove(id)
+				}
 				return
 			}
-
+			if p != nil {
+				_ = p.Remove(id)
+			}
 			logger.Info("grpc deferred transition applied",
-				"file", filePath, "defaults", c.Defaults, "delay", delay.String())
+				"file", filePath, "defaults", source, "delay", delay.String())
 
 		case <-fileCtx.Done():
+			// Cancelled via CancelFile (delete / reschedule) or gen ctx
+			// (Stop / Reset). Fire-time removal is handled by the
+			// caller (CancelFile for explicit cancel; Reset for
+			// hot-reload; Stop intentionally leaves items on disk).
 			return
 		}
 	}()
+}
+
+// Rearm re-arms pending items loaded from the persister on startup. Items
+// whose fireAt is already in the past are applied synchronously; future
+// items are scheduled with the remaining delay using their original id.
+func (s *grpcTransitionScheduler) Rearm(items []runtimepersist.ScheduledItem) {
+	now := time.Now()
+	s.mu.Lock()
+	p := s.persister
+	s.mu.Unlock()
+
+	for _, it := range items {
+		if it.Scope != "grpc" {
+			continue
+		}
+		var payload map[string]interface{}
+		if err := json.Unmarshal(it.ResolvedPayload, &payload); err != nil {
+			logger.Warn("grpc rearm: invalid resolvedPayload, dropping",
+				"id", it.ID, "err", err)
+			if p != nil {
+				_ = p.Remove(it.ID)
+			}
+			continue
+		}
+		if !it.FireAt.After(now) {
+			if _, err := persist.Update(it.FilePath, payload); err != nil {
+				if persist.IsNotFound(err) {
+					logger.Warn("grpc rearm: past-due target missing",
+						"file", it.FilePath)
+				} else {
+					logger.Error("grpc rearm: past-due update failed",
+						"file", it.FilePath, "err", err)
+				}
+			} else {
+				logger.Info("grpc rearm: past-due transition applied",
+					"file", it.FilePath, "source", it.Source)
+			}
+			if p != nil {
+				_ = p.Remove(it.ID)
+			}
+			continue
+		}
+		remaining := time.Until(it.FireAt)
+		s.scheduleResolved(it.ID, remaining, it.FilePath, payload, it.Source)
+	}
 }
 
 // HasPending reports whether there is at least one in-flight deferred
@@ -206,24 +324,27 @@ func (s *grpcTransitionScheduler) ScheduleIfIdle(route *config.GRPCRoute, filePa
 }
 
 // CancelFile cancels any in-flight deferred mutations targeting the given
-// filePath. Called when a file is deleted (via handler's delete merge path)
-// or rescheduled (via Schedule) so stale goroutines cannot stomp a
-// subsequently-recreated file.
+// filePath and prunes the matching persisted items (so a deleted resource
+// does not come back on the next boot). Called when a file is deleted or
+// rescheduled.
 func (s *grpcTransitionScheduler) CancelFile(filePath string) {
 	s.mu.Lock()
 	entries := s.pending[filePath]
 	delete(s.pending, filePath)
+	p := s.persister
 	s.mu.Unlock()
 
 	for _, pm := range entries {
 		pm.cancel()
+		if p != nil {
+			_ = p.Remove(pm.id)
+		}
 	}
 }
 
 // Reset cancels all pending mutations and creates a fresh generation.
-// The pending map is cleared atomically with the generation swap so that
-// a concurrent Schedule() on the new generation does not see stale entries
-// from goroutines that are still draining their deferred cleanup.
+// Hot-reload semantics: wipe the gRPC-scoped persisted schedule too,
+// since the new config may carry different transitions.
 func (s *grpcTransitionScheduler) Reset(parent context.Context) {
 	newGen := transitions.NewGeneration(parent)
 
@@ -231,12 +352,21 @@ func (s *grpcTransitionScheduler) Reset(parent context.Context) {
 	oldGen := s.gen
 	s.gen = newGen
 	s.pending = make(map[string][]*pendingMutation)
+	p := s.persister
 	s.mu.Unlock()
 
 	oldGen.Stop()
+
+	if p != nil {
+		if err := p.RemoveByScope("grpc"); err != nil {
+			logger.Warn("grpc scheduler reset: clearing persisted schedule failed", "err", err)
+		}
+	}
 }
 
 // Stop cancels all pending mutations and waits for goroutines to finish.
+// Intentionally does NOT clear the persister — pending items must survive
+// shutdown so the next start can re-arm them.
 func (s *grpcTransitionScheduler) Stop() {
 	s.mu.Lock()
 	gen := s.gen

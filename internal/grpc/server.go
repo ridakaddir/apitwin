@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/ridakaddir/apitwin/internal/config"
 	"github.com/ridakaddir/apitwin/internal/logger"
+	runtimepersist "github.com/ridakaddir/apitwin/internal/runtime/persist"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	v1reflectiongrpc "google.golang.org/grpc/reflection/grpc_reflection_v1"
@@ -34,6 +37,11 @@ type ServerOptions struct {
 		ConfigDir() string
 		StubRoot() string
 	}
+	// MetaDir is the runtime metadata directory (normally shared with the
+	// HTTP server's runtime dir). When non-empty, the gRPC server
+	// persists transition FirstHit and pending scheduled mutations there
+	// so they survive restarts. Empty → no persistence.
+	MetaDir string
 }
 
 // Server wraps a grpc.Server and its supporting components.
@@ -41,6 +49,11 @@ type Server struct {
 	opts    ServerOptions
 	srv     *grpc.Server
 	handler *handler
+
+	// pendingRearm holds items loaded from scheduled.json at construction
+	// time. They are applied once the handler/scheduler are fully wired
+	// in the Start() path.
+	pendingRearm []runtimepersist.ScheduledItem
 
 	invokerOnce sync.Once
 	invoker     *Invoker
@@ -59,6 +72,36 @@ func NewServer(opts ServerOptions) (*Server, error) {
 	}
 
 	h := newHandler(opts.Loader, registry, opts.Target)
+
+	// Wire persistence if a metadata directory is configured. Both the
+	// transition FirstHit state and the pending-mutation schedule live
+	// under opts.MetaDir, alongside the HTTP server's copies.
+	var pendingRearm []runtimepersist.ScheduledItem
+	if opts.MetaDir != "" {
+		if err := os.MkdirAll(opts.MetaDir, 0755); err != nil {
+			return nil, fmt.Errorf("creating grpc meta dir %q: %w", opts.MetaDir, err)
+		}
+		transitionsPath := filepath.Join(opts.MetaDir, "transitions.json")
+		scheduledPath := filepath.Join(opts.MetaDir, "scheduled.json")
+
+		tfile, tErr := runtimepersist.LoadTransitions(transitionsPath)
+		if tErr != nil {
+			logger.Warn("grpc transitions load failed; continuing with empty state", "err", tErr)
+			tfile = runtimepersist.EmptyTransitions()
+		}
+		tPersister := newTransitionsDiskPersister(transitionsPath)
+		h.transitions = newGRPCPersistentTransitionState(tPersister, tfile.Scope("grpc"))
+
+		schedPersister := runtimepersist.NewScheduledPersister(scheduledPath, filepath.Dir(opts.MetaDir))
+		h.scheduler.SetPersister(schedPersister)
+
+		sfile, sErr := schedPersister.Load()
+		if sErr != nil {
+			logger.Warn("grpc scheduled load failed; continuing with empty state", "err", sErr)
+			sfile = runtimepersist.EmptyScheduled()
+		}
+		pendingRearm = sfile.ItemsForScope("grpc")
+	}
 
 	srv := grpc.NewServer(
 		grpc.UnknownServiceHandler(h.serve),
@@ -82,9 +125,10 @@ func NewServer(opts ServerOptions) (*Server, error) {
 	}
 
 	return &Server{
-		opts:    opts,
-		srv:     srv,
-		handler: h,
+		opts:         opts,
+		srv:          srv,
+		handler:      h,
+		pendingRearm: pendingRearm,
 	}, nil
 }
 
@@ -93,6 +137,15 @@ func (s *Server) Start(ctx context.Context) error {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", s.opts.Port))
 	if err != nil {
 		return fmt.Errorf("gRPC listen on port %d: %w", s.opts.Port, err)
+	}
+
+	// Re-arm any pending deferred mutations persisted by a previous
+	// session. Past-due items fire synchronously; future items schedule
+	// with the remaining delay.
+	if len(s.pendingRearm) > 0 {
+		logger.Info("grpc rearming persisted transitions", "count", len(s.pendingRearm))
+		s.handler.scheduler.Rearm(s.pendingRearm)
+		s.pendingRearm = nil
 	}
 
 	errCh := make(chan error, 1)

@@ -1,0 +1,13 @@
+# Runtime state dir — wiped by run.sh at scenario boundaries.
+.apitwin/
+
+# Seed stubs dir — rebuilt from seed-template/ on every scenario.
+stubs/
+
+# Per-iteration reports.
+report/iteration-*.json
+report/iteration-*.jsonl
+report/iteration-*.log
+
+# Keep the report/ dir itself.
+!report/.gitkeep

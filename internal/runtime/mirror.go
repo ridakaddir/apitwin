@@ -10,11 +10,13 @@
 package runtime
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ridakaddir/apitwin/internal/logger"
 )
@@ -22,10 +24,39 @@ import (
 // stateSubdir is the path (relative to the config dir) of the runtime mirror.
 const stateSubdir = ".apitwin/state"
 
+// sentinelFilename is the version marker written at the root of the runtime
+// dir on first initialisation. Its presence signals "this runtime dir has
+// been set up before" so a subsequent start preserves runtime-only files.
+// The embedded version also lets future on-disk format changes migrate.
+const sentinelFilename = ".apitwin-runtime-v1"
+
+// metaSubdir holds out-of-band persisted state (transitions FirstHit map,
+// pending scheduled mutations) inside the runtime dir. Kept separate from
+// mirrored content so it's easy to clear on hot-reload or reset.
+const metaSubdir = ".apitwin-meta"
+
+// sentinelVersion is the format version encoded in the sentinel file. Bump
+// this if the on-disk shapes under .apitwin-meta/ change incompatibly.
+const sentinelVersion = 1
+
+// sentinelContent is the JSON written into sentinelFilename.
+type sentinelContent struct {
+	Version   int       `json:"version"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 // DefaultPath returns the default runtime state directory for a given config
 // directory: <configDir>/.apitwin/state.
 func DefaultPath(configDir string) string {
 	return filepath.Join(configDir, ".apitwin", "state")
+}
+
+// MetaDir returns the metadata directory inside a runtime state dir. Used
+// for persisted transition FirstHit timestamps and pending scheduled
+// mutations, stored as JSON alongside (but not mingled with) the mirrored
+// stub tree.
+func MetaDir(runtimeDir string) string {
+	return filepath.Join(runtimeDir, metaSubdir)
 }
 
 // IsRuntimePath reports whether path looks like an apitwin runtime state
@@ -36,34 +67,72 @@ func IsRuntimePath(path string) bool {
 	return strings.HasSuffix(clean, filepath.FromSlash(stateSubdir))
 }
 
-// Mirror wipes the runtime state dir under configDir and repopulates it by
-// copying every file in the config tree (except top-level config files and
-// the runtime dir itself). Returns the absolute runtime dir path.
+// OverlaySeed copies every seed file into the runtime dir, overwriting any
+// runtime-side file at the same path (seed wins on overlap). Runtime-only
+// files — e.g. stubs created via POST that never existed in seed — are
+// preserved.
 //
-// The mirror is intentionally idempotent and destructive: a fresh server
-// start always gives a pristine runtime state. If you need persistence
-// across runs, omit the flag or use a seed-only workflow.
+// Returns (runtimeDir, initialised, err). `initialised` is true when this
+// call set up the runtime dir for the first time (sentinel was absent).
+// Callers use that signal only for logging; the behavioural contract is
+// the same either way.
+func OverlaySeed(configDir string) (string, bool, error) {
+	absConfig, err := filepath.Abs(configDir)
+	if err != nil {
+		return "", false, fmt.Errorf("resolving config dir %q: %w", configDir, err)
+	}
+
+	runtimeDir := DefaultPath(absConfig)
+	if err := os.MkdirAll(runtimeDir, 0755); err != nil {
+		return "", false, fmt.Errorf("creating runtime dir %q: %w", runtimeDir, err)
+	}
+
+	sentinelPath := filepath.Join(runtimeDir, sentinelFilename)
+	_, statErr := os.Stat(sentinelPath)
+	initialised := os.IsNotExist(statErr)
+
+	// Copy the seed tree on top of the runtime dir. copyFile opens the
+	// destination with O_TRUNC, so pre-existing runtime copies of seed
+	// files are overwritten cleanly. Runtime-only paths are left alone
+	// because we only walk the seed.
+	if walkErr := mirrorTree(absConfig, runtimeDir); walkErr != nil {
+		return "", false, fmt.Errorf("mirroring config tree: %w", walkErr)
+	}
+
+	if initialised {
+		if err := writeSentinel(sentinelPath); err != nil {
+			return "", false, fmt.Errorf("writing sentinel %q: %w", sentinelPath, err)
+		}
+	}
+
+	return runtimeDir, initialised, nil
+}
+
+// Mirror is the explicit-reset entrypoint: wipes the runtime dir entirely
+// (including runtime-only files and persisted metadata) and repopulates
+// from seed. Used by `apitwin --reset-runtime` and the `apitwin reset`
+// subcommand when the user wants a clean slate.
 func Mirror(configDir string) (string, error) {
 	absConfig, err := filepath.Abs(configDir)
 	if err != nil {
 		return "", fmt.Errorf("resolving config dir %q: %w", configDir, err)
 	}
-
 	runtimeDir := DefaultPath(absConfig)
-
-	// Wipe any previous runtime state so we start from a clean mirror.
 	if err := os.RemoveAll(runtimeDir); err != nil {
 		return "", fmt.Errorf("wiping runtime dir %q: %w", runtimeDir, err)
 	}
-	if err := os.MkdirAll(runtimeDir, 0755); err != nil {
-		return "", fmt.Errorf("creating runtime dir %q: %w", runtimeDir, err)
-	}
+	dir, _, err := OverlaySeed(absConfig)
+	return dir, err
+}
 
-	if walkErr := mirrorTree(absConfig, runtimeDir); walkErr != nil {
-		return "", fmt.Errorf("mirroring config tree: %w", walkErr)
+// writeSentinel writes the version-marker JSON to the given path. Called
+// on first-ever OverlaySeed and by the explicit Mirror reset path.
+func writeSentinel(path string) error {
+	data, err := json.Marshal(sentinelContent{Version: sentinelVersion, CreatedAt: time.Now().UTC()})
+	if err != nil {
+		return err
 	}
-
-	return runtimeDir, nil
+	return os.WriteFile(path, data, 0644)
 }
 
 // Ephemeral creates a fresh temporary directory for runtime state. Used under
@@ -90,7 +159,18 @@ func MirrorInto(configDir, runtimeDir string) error {
 	if err != nil {
 		return fmt.Errorf("resolving runtime dir %q: %w", runtimeDir, err)
 	}
-	return mirrorTree(absConfig, absRuntime)
+	if err := mirrorTree(absConfig, absRuntime); err != nil {
+		return err
+	}
+	// Write the sentinel so ephemeral runs share the same on-disk layout
+	// as persistent ones. Harmless if it already exists.
+	sentinelPath := filepath.Join(absRuntime, sentinelFilename)
+	if _, statErr := os.Stat(sentinelPath); os.IsNotExist(statErr) {
+		if err := writeSentinel(sentinelPath); err != nil {
+			return fmt.Errorf("writing sentinel %q: %w", sentinelPath, err)
+		}
+	}
+	return nil
 }
 
 // mirrorTree walks srcDir and copies every file into dstDir, skipping:
