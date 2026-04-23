@@ -38,6 +38,7 @@ var (
 	initMode     bool
 	noRuntimeDir bool
 	ephemeral    bool
+	resetRuntime bool
 
 	// gRPC flags — server only starts when --grpc-proto is provided.
 	grpcPort        int
@@ -70,6 +71,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&initMode, "init", false, "Scaffold an apitwin.toml template in the current directory")
 	rootCmd.Flags().BoolVar(&ephemeral, "ephemeral", false, "Mirror stubs into a tempdir wiped on shutdown; nothing lands on disk next to the config")
 	rootCmd.Flags().BoolVar(&noRuntimeDir, "no-runtime-dir", false, "Write mutations back to seed stubs (legacy, dirties git)")
+	rootCmd.Flags().BoolVar(&resetRuntime, "reset-runtime", false, "Wipe the runtime state directory on start and re-mirror from seed (default preserves runtime-only stubs and persisted transition state across restarts)")
 
 	// gRPC flags.
 	rootCmd.Flags().IntVar(&grpcPort, "grpc-port", 50051, "gRPC server port (only used when --grpc-proto is provided)")
@@ -109,6 +111,7 @@ func run(cmd *cobra.Command, args []string) error {
 		MaskPII:      !noMaskPII,
 		NoRuntimeDir: noRuntimeDir,
 		Ephemeral:    ephemeral,
+		ResetRuntime: resetRuntime,
 	}
 
 	srv, err := proxy.NewServer(opts)
@@ -127,6 +130,7 @@ func run(cmd *cobra.Command, args []string) error {
 			Target:      grpcTarget,
 			Port:        grpcPort,
 			Loader:      srv.Loader(),
+			MetaDir:     srv.MetaDir(),
 		})
 		if err != nil {
 			return fmt.Errorf("starting gRPC server: %w", err)

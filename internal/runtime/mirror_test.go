@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestMirror_CopiesStubTreeAndExcludesConfigFiles(t *testing.T) {
+func TestOverlaySeed_CopiesStubTreeAndExcludesConfigFiles(t *testing.T) {
 	seed := t.TempDir()
 
 	// Seed tree:
@@ -19,9 +19,12 @@ func TestMirror_CopiesStubTreeAndExcludesConfigFiles(t *testing.T) {
 	writeSeed(t, seed, filepath.Join("fixtures", "nested", "b.json"), `{"id":"b"}`)
 	writeSeed(t, seed, filepath.Join(".apitwin", "stale.txt"), `old`)
 
-	runtimeDir, err := Mirror(seed)
+	runtimeDir, initialised, err := OverlaySeed(seed)
 	if err != nil {
-		t.Fatalf("Mirror: %v", err)
+		t.Fatalf("OverlaySeed: %v", err)
+	}
+	if !initialised {
+		t.Error("expected initialised=true on first call")
 	}
 
 	expectedRuntime := filepath.Join(seed, ".apitwin", "state")
@@ -33,34 +36,107 @@ func TestMirror_CopiesStubTreeAndExcludesConfigFiles(t *testing.T) {
 	assertExists(t, filepath.Join(runtimeDir, "stubs", "a.json"))
 	assertExists(t, filepath.Join(runtimeDir, "fixtures", "nested", "b.json"))
 
+	// Sentinel should exist after first-run init.
+	assertExists(t, filepath.Join(runtimeDir, sentinelFilename))
+
 	// Excluded files must NOT exist in the runtime dir.
 	assertNotExists(t, filepath.Join(runtimeDir, "apitwin.toml"))
 	assertNotExists(t, filepath.Join(runtimeDir, ".apitwin", "stale.txt"))
 }
 
-func TestMirror_WipesPreviousRuntimeState(t *testing.T) {
+func TestOverlaySeed_PreservesRuntimeOnlyFiles(t *testing.T) {
 	seed := t.TempDir()
 	writeSeed(t, seed, filepath.Join("stubs", "a.json"), `{"id":"a"}`)
 
-	// Populate a stale runtime dir with a file that should disappear.
-	runtimeDir := DefaultPath(seed)
-	if err := os.MkdirAll(filepath.Join(runtimeDir, "stubs"), 0755); err != nil {
-		t.Fatalf("mkdir: %v", err)
+	// First run: initialise the runtime dir.
+	runtimeDir, initialised, err := OverlaySeed(seed)
+	if err != nil {
+		t.Fatalf("OverlaySeed #1: %v", err)
 	}
-	stale := filepath.Join(runtimeDir, "stubs", "old.json")
-	if err := os.WriteFile(stale, []byte(`{"stale":true}`), 0644); err != nil {
-		t.Fatalf("writing stale: %v", err)
-	}
-
-	if _, err := Mirror(seed); err != nil {
-		t.Fatalf("Mirror: %v", err)
+	if !initialised {
+		t.Error("first call should be initialising")
 	}
 
-	assertNotExists(t, stale)
+	// Simulate a runtime POST that created a new stub which does not
+	// exist in seed.
+	runtimeOnly := filepath.Join(runtimeDir, "stubs", "runtime-created.json")
+	if err := os.WriteFile(runtimeOnly, []byte(`{"id":"runtime"}`), 0644); err != nil {
+		t.Fatalf("writing runtime-only stub: %v", err)
+	}
+
+	// Second run: runtime dir already initialised.
+	_, initialised2, err := OverlaySeed(seed)
+	if err != nil {
+		t.Fatalf("OverlaySeed #2: %v", err)
+	}
+	if initialised2 {
+		t.Error("second call should not be initialising")
+	}
+
+	assertExists(t, runtimeOnly)
 	assertExists(t, filepath.Join(runtimeDir, "stubs", "a.json"))
 }
 
-func TestMirror_SeedStubsAreNotModified(t *testing.T) {
+func TestOverlaySeed_SeedWinsOnOverlap(t *testing.T) {
+	seed := t.TempDir()
+	seedStubRel := filepath.Join("stubs", "a.json")
+	writeSeed(t, seed, seedStubRel, `{"id":"a","name":"original"}`)
+
+	runtimeDir, _, err := OverlaySeed(seed)
+	if err != nil {
+		t.Fatalf("OverlaySeed #1: %v", err)
+	}
+
+	// Simulate a runtime mutation (PATCH) to the seed-derived file.
+	runtimeCopy := filepath.Join(runtimeDir, "stubs", "a.json")
+	if err := os.WriteFile(runtimeCopy, []byte(`{"id":"a","name":"mutated"}`), 0644); err != nil {
+		t.Fatalf("mutate runtime: %v", err)
+	}
+
+	// Seed file is edited (simulates git pull / manual edit).
+	if err := os.WriteFile(filepath.Join(seed, seedStubRel), []byte(`{"id":"a","name":"updated"}`), 0644); err != nil {
+		t.Fatalf("edit seed: %v", err)
+	}
+
+	// Second run: seed should win over the runtime mutation.
+	if _, _, err := OverlaySeed(seed); err != nil {
+		t.Fatalf("OverlaySeed #2: %v", err)
+	}
+
+	got, err := os.ReadFile(runtimeCopy)
+	if err != nil {
+		t.Fatalf("read runtime copy: %v", err)
+	}
+	if string(got) != `{"id":"a","name":"updated"}` {
+		t.Errorf("runtime copy = %q, want seed content", string(got))
+	}
+}
+
+func TestMirror_WipesRuntimeIncludingRuntimeOnlyFiles(t *testing.T) {
+	seed := t.TempDir()
+	writeSeed(t, seed, filepath.Join("stubs", "a.json"), `{"id":"a"}`)
+
+	runtimeDir, _, err := OverlaySeed(seed)
+	if err != nil {
+		t.Fatalf("OverlaySeed: %v", err)
+	}
+
+	// A runtime-only file that Mirror (reset) must remove.
+	runtimeOnly := filepath.Join(runtimeDir, "stubs", "only.json")
+	if err := os.WriteFile(runtimeOnly, []byte(`{"only":true}`), 0644); err != nil {
+		t.Fatalf("write runtime-only: %v", err)
+	}
+
+	if _, err := Mirror(seed); err != nil {
+		t.Fatalf("Mirror (reset): %v", err)
+	}
+
+	assertNotExists(t, runtimeOnly)
+	assertExists(t, filepath.Join(runtimeDir, "stubs", "a.json"))
+	assertExists(t, filepath.Join(runtimeDir, sentinelFilename))
+}
+
+func TestOverlaySeed_SeedStubsAreNotModified(t *testing.T) {
 	seed := t.TempDir()
 	seedStub := filepath.Join(seed, "stubs", "a.json")
 	writeSeed(t, seed, filepath.Join("stubs", "a.json"), `{"id":"a"}`)
@@ -70,9 +146,9 @@ func TestMirror_SeedStubsAreNotModified(t *testing.T) {
 		t.Fatalf("stat seed: %v", err)
 	}
 
-	runtimeDir, err := Mirror(seed)
+	runtimeDir, _, err := OverlaySeed(seed)
 	if err != nil {
-		t.Fatalf("Mirror: %v", err)
+		t.Fatalf("OverlaySeed: %v", err)
 	}
 
 	// Mutate the runtime copy. The seed file must remain byte-identical.

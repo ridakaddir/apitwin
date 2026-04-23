@@ -7,7 +7,9 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httputil"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -15,6 +17,8 @@ import (
 	"github.com/ridakaddir/apitwin/internal/config"
 	"github.com/ridakaddir/apitwin/internal/logger"
 	apitwinruntime "github.com/ridakaddir/apitwin/internal/runtime"
+	runtimepersist "github.com/ridakaddir/apitwin/internal/runtime/persist"
+	"github.com/ridakaddir/apitwin/internal/transitions"
 	uifs "github.com/ridakaddir/apitwin/ui"
 )
 
@@ -48,6 +52,12 @@ type ServerOptions struct {
 	// wiped on shutdown. Useful for CI and one-shot demos. Mutually
 	// exclusive with NoRuntimeDir (ephemeral wins if both are set).
 	Ephemeral bool
+
+	// ResetRuntime wipes the runtime state directory before startup and
+	// re-mirrors from seed. Runtime-only stubs (created via POST) and the
+	// persisted transition / schedule metadata are cleared. No effect in
+	// --no-runtime-dir or --ephemeral modes.
+	ResetRuntime bool
 }
 
 // GRPCInvoker is the narrow surface the devtool HTTP endpoints need from the
@@ -92,18 +102,11 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		}
 	}
 
-	// transitions and scheduler are created here so we can reference them
-	// in the onChange callback before the handler is fully constructed.
-	ts := newTransitionState()
-	sched := newTransitionScheduler(context.Background())
-
-	loader, err := config.NewLoader(opts.ConfigPath, func(cfg *config.Config) {
-		logger.Info("config reloaded", "routes", len(cfg.Routes))
-		ts.Reset()
-		sched.Reset(context.Background())
-	})
+	// Load config first so we know ConfigDir() for the runtime-dir
+	// bootstrap. The onChange callback is attached after ts/sched are
+	// constructed below — that way the callback can close over them.
+	loader, err := config.NewLoader(opts.ConfigPath, nil)
 	if err != nil {
-		sched.Stop()
 		return nil, fmt.Errorf("loading config: %w", err)
 	}
 
@@ -111,8 +114,10 @@ func NewServer(opts ServerOptions) (*Server, error) {
 	//
 	// Unless --no-runtime-dir is passed, mirror the seed tree into either
 	// .apitwin/state/ (default) or a tempdir (--ephemeral) and redirect all
-	// stub I/O there. This keeps git clean after mutation traffic: the seed
-	// files are never touched once the mirror is created.
+	// stub I/O there. The default behavior is seed-overlay: seed files are
+	// copied on top of any runtime copies (seed wins), but runtime-only
+	// files created via POST are preserved across restarts. Use
+	// ResetRuntime for a full wipe.
 	var (
 		runtimeDir   string
 		ephemeralDir string
@@ -123,24 +128,36 @@ func NewServer(opts ServerOptions) (*Server, error) {
 	case opts.Ephemeral:
 		edir, eErr := apitwinruntime.Ephemeral()
 		if eErr != nil {
-			sched.Stop()
+			loader.Close()
 			return nil, fmt.Errorf("creating ephemeral runtime dir: %w", eErr)
 		}
 		if mErr := apitwinruntime.MirrorInto(loader.ConfigDir(), edir); mErr != nil {
 			_ = apitwinruntime.Cleanup(edir)
-			sched.Stop()
+			loader.Close()
 			return nil, fmt.Errorf("mirroring into ephemeral runtime dir: %w", mErr)
 		}
 		runtimeDir = edir
 		ephemeralDir = edir
 		logger.Info("runtime state dir (ephemeral)", "dir", edir)
 	default:
-		rdir, mErr := apitwinruntime.Mirror(loader.ConfigDir())
+		if opts.ResetRuntime {
+			if err := apitwinruntime.Cleanup(apitwinruntime.DefaultPath(loader.ConfigDir())); err != nil {
+				loader.Close()
+				return nil, fmt.Errorf("reset-runtime cleanup: %w", err)
+			}
+			logger.Info("runtime state reset (--reset-runtime): wiped runtime dir and persisted metadata")
+		}
+		rdir, initialised, mErr := apitwinruntime.OverlaySeed(loader.ConfigDir())
 		if mErr != nil {
-			sched.Stop()
-			return nil, fmt.Errorf("mirroring runtime state dir: %w", mErr)
+			loader.Close()
+			return nil, fmt.Errorf("overlaying seed into runtime state dir: %w", mErr)
 		}
 		runtimeDir = rdir
+		if initialised {
+			logger.Info("runtime state dir initialised from seed", "dir", rdir)
+		} else {
+			logger.Info("runtime state dir refreshed from seed (runtime-only stubs preserved)", "dir", rdir)
+		}
 		if eiErr := apitwinruntime.EnsureGitignore(loader.ConfigDir()); eiErr != nil {
 			logger.Warn("could not update .gitignore", "err", eiErr)
 		}
@@ -149,6 +166,56 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		}
 	}
 	loader.SetStubRoot(runtimeDir)
+
+	// Persistence wiring: only when we have a non-empty runtime dir and
+	// it's not ephemeral. Legacy mode (NoRuntimeDir) and Ephemeral mode
+	// get plain in-memory ts/sched.
+	var (
+		ts              *transitionState
+		sched           *transitionScheduler
+		schedPersister  *runtimepersist.ScheduledPersister
+		pendingForRest  []runtimepersist.ScheduledItem
+	)
+	if runtimeDir != "" && !opts.Ephemeral {
+		metaDir := apitwinruntime.MetaDir(runtimeDir)
+		if err := os.MkdirAll(metaDir, 0755); err != nil {
+			loader.Close()
+			return nil, fmt.Errorf("creating runtime meta dir %q: %w", metaDir, err)
+		}
+		transitionsPath := filepath.Join(metaDir, "transitions.json")
+		scheduledPath := filepath.Join(metaDir, "scheduled.json")
+
+		tfile, tErr := runtimepersist.LoadTransitions(transitionsPath)
+		if tErr != nil {
+			logger.Warn("transitions load failed; continuing with empty state", "err", tErr)
+			tfile = runtimepersist.EmptyTransitions()
+		}
+		tPersister := newTransitionsDiskPersister(transitionsPath)
+		ts = transitions.NewPersistentState[*config.Route](
+			routeKey, "rest", tPersister, tfile.Scope("rest"),
+		)
+
+		schedPersister = runtimepersist.NewScheduledPersister(scheduledPath, runtimeDir)
+		sfile, sErr := schedPersister.Load()
+		if sErr != nil {
+			logger.Warn("scheduled load failed; continuing with empty state", "err", sErr)
+			sfile = runtimepersist.EmptyScheduled()
+		}
+		pendingForRest = sfile.ItemsForScope("rest")
+
+		sched = newTransitionScheduler(context.Background())
+		sched.SetPersister(schedPersister)
+	} else {
+		ts = newTransitionState()
+		sched = newTransitionScheduler(context.Background())
+	}
+
+	// Attach the hot-reload callback now that ts/sched exist.
+	loader.AddOnChange(func(cfg *config.Config) {
+		logger.Info("config reloaded", "routes", len(cfg.Routes))
+		ts.Reset()
+		sched.Reset(context.Background())
+	})
 
 	// Start the stub watcher to automatically re-evaluate cross-references
 	// when stub files change (e.g. deployment created → endpoint's
@@ -197,6 +264,15 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		WriteTimeout: 120 * time.Second,
 		IdleTimeout:  120 * time.Second,
 	}
+
+	// Re-arm any pending deferred mutations persisted by a previous
+	// session. Past-due items fire synchronously; future items re-schedule
+	// with the remaining delay.
+	if len(pendingForRest) > 0 {
+		logger.Info("rearming persisted transitions", "count", len(pendingForRest))
+		sched.Rearm(pendingForRest)
+	}
+
 	return s, nil
 }
 
@@ -280,6 +356,17 @@ func (s *Server) cleanupEphemeral() {
 // subsystems (e.g. the gRPC server, tests) can observe it.
 func (s *Server) RuntimeDir() string {
 	return s.runtimeDir
+}
+
+// MetaDir returns the persisted-metadata directory inside the runtime dir
+// (empty in legacy / ephemeral mode where persistence is disabled). Used
+// by cmd/root.go to hand the same metadata location to the gRPC server so
+// REST and gRPC share one transitions.json / scheduled.json.
+func (s *Server) MetaDir() string {
+	if s.runtimeDir == "" || s.ephemeralDir != "" {
+		return ""
+	}
+	return apitwinruntime.MetaDir(s.runtimeDir)
 }
 
 // apiGRPCMethodsHandler returns the loaded gRPC method schemas for the UI.

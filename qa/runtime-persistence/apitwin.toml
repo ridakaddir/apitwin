@@ -1,0 +1,183 @@
+# QA harness: runtime-state persistence (REST)
+#
+# Exercises the default runtime-dir mode: .apitwin/state/ should be
+# non-destructively overlaid with seed on every start, preserving
+# runtime-only stubs and persisted transition / schedule metadata.
+#
+# Domain: continent / country / city.
+
+########################################
+# Continents — used by scenario 02 (seed-wins).
+########################################
+
+# GetContinent — pure read
+[[routes]]
+method   = "GET"
+match    = "/continents/{code}"
+enabled  = true
+fallback = "found"
+
+  [routes.cases.found]
+  status = 200
+  file   = "stubs/continents/{path.code}.json"
+
+# PatchContinent — runtime mutation
+[[routes]]
+method   = "PATCH"
+match    = "/continents/{code}"
+enabled  = true
+fallback = "updated"
+
+  [routes.cases.updated]
+  status  = 200
+  file    = "stubs/continents/{path.code}.json"
+  persist = true
+  merge   = "update"
+
+########################################
+# Countries — used by scenarios 01, 06.
+########################################
+
+# CreateCountry — runtime-only resource creation
+[[routes]]
+method   = "POST"
+match    = "/countries"
+enabled  = true
+fallback = "created"
+
+  [routes.cases.created]
+  status   = 201
+  file     = "stubs/countries/"
+  persist  = true
+  merge    = "append"
+  key      = "code"
+  defaults = "defaults/country-created.json"
+
+# GetCountry
+[[routes]]
+method   = "GET"
+match    = "/countries/{code}"
+enabled  = true
+fallback = "found"
+
+  [routes.cases.found]
+  status = 200
+  file   = "stubs/countries/{path.code}.json"
+
+# DeleteCountry
+[[routes]]
+method   = "DELETE"
+match    = "/countries/{code}"
+enabled  = true
+fallback = "deleted"
+
+  [routes.cases.deleted]
+  status  = 200
+  file    = "stubs/countries/{path.code}.json"
+  persist = true
+  merge   = "delete"
+
+########################################
+# Cities (transition, 3s) — scenario 03 (FirstHit survives restart).
+########################################
+
+# GetCityStatus — transitions initial→ready after 3s since first hit
+[[routes]]
+method   = "GET"
+match    = "/cities/{code}/status"
+enabled  = true
+fallback = "initial"
+
+  [[routes.transitions]]
+  case     = "initial"
+  duration = 3
+
+  [[routes.transitions]]
+  case = "ready"
+
+  [routes.cases.initial]
+  status = 200
+  json   = '{"status":"initial"}'
+
+  [routes.cases.ready]
+  status = 200
+  json   = '{"status":"ready"}'
+
+########################################
+# Towns (POST with deferred mutation) — scenarios 04, 05.
+########################################
+
+# CreateTown — background transition ready after configurable delay.
+# 04 uses 5s delay, 05 uses 10s delay. Use separate routes so both can
+# coexist with different timings.
+[[routes]]
+method   = "POST"
+match    = "/towns-short"
+enabled  = true
+fallback = "created"
+
+  [[routes.transitions]]
+  case     = "provisioning"
+  duration = 5
+
+  [[routes.transitions]]
+  case = "ready"
+
+  [routes.cases.created]
+  status   = 201
+  file     = "stubs/towns_short/"
+  persist  = true
+  merge    = "append"
+  key      = "code"
+  defaults = "defaults/town-provisioning.json"
+
+  [routes.cases.ready]
+  persist  = true
+  merge    = "update"
+  defaults = "defaults/town-ready.json"
+
+[[routes]]
+method   = "GET"
+match    = "/towns-short/{code}"
+enabled  = true
+fallback = "found"
+
+  [routes.cases.found]
+  status = 200
+  file   = "stubs/towns_short/{path.code}.json"
+
+[[routes]]
+method   = "POST"
+match    = "/towns-long"
+enabled  = true
+fallback = "created"
+
+  [[routes.transitions]]
+  case     = "provisioning"
+  duration = 10
+
+  [[routes.transitions]]
+  case = "ready"
+
+  [routes.cases.created]
+  status   = 201
+  file     = "stubs/towns_long/"
+  persist  = true
+  merge    = "append"
+  key      = "code"
+  defaults = "defaults/town-provisioning.json"
+
+  [routes.cases.ready]
+  persist  = true
+  merge    = "update"
+  defaults = "defaults/town-ready.json"
+
+[[routes]]
+method   = "GET"
+match    = "/towns-long/{code}"
+enabled  = true
+fallback = "found"
+
+  [routes.cases.found]
+  status = 200
+  file   = "stubs/towns_long/{path.code}.json"
