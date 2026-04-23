@@ -1,0 +1,87 @@
+# QA harness: successive client-driven updates against a wrap="country" route.
+#
+# Both lanes persist the (unwrapped) Country shape to disk. The Wrapped lane
+# returns a CountryEnvelope wire response; the unwrapped baseline returns
+# Country directly.
+
+########################################
+# Wrapped lane
+########################################
+
+[[grpc_routes]]
+match = "/geography.GeographyService/CreateCountryWrapped"
+fallback = "created"
+
+  [grpc_routes.cases.created]
+  status   = 0
+  file     = "stubs/countries_wrap/"
+  persist  = true
+  merge    = "append"
+  key      = "code"
+  wrap     = "country"
+  defaults = "defaults/country-provisioning.json"
+
+[[grpc_routes]]
+match = "/geography.GeographyService/UpdateCountryWrapped"
+fallback = "updated"
+
+  [grpc_routes.cases.updated]
+  status  = 0
+  file    = "stubs/countries_wrap/{body.country.code}.json"
+  persist = true
+  merge   = "update"
+  wrap    = "country"
+  source  = "country"
+
+[[grpc_routes]]
+match = "/geography.GeographyService/GetCountryWrapped"
+fallback = "found"
+
+  [grpc_routes.cases.found]
+  file = "stubs/countries_wrap/{body.code}.json"
+  wrap = "country"
+
+# Flat-request, wrapped-response variant (06-flat-to-wrapped scenario).
+[[grpc_routes]]
+match = "/geography.GeographyService/UpdateCountryFlatToWrapped"
+fallback = "updated"
+
+  [grpc_routes.cases.updated]
+  status  = 0
+  file    = "stubs/countries_wrap/{body.code}.json"
+  persist = true
+  merge   = "update"
+  wrap    = "country"
+
+########################################
+# Unwrapped control lane
+########################################
+
+[[grpc_routes]]
+match = "/geography.GeographyService/CreateCountry"
+fallback = "created"
+
+  [grpc_routes.cases.created]
+  status   = 0
+  file     = "stubs/countries/"
+  persist  = true
+  merge    = "append"
+  key      = "code"
+  defaults = "defaults/country-provisioning.json"
+
+[[grpc_routes]]
+match = "/geography.GeographyService/UpdateCountry"
+fallback = "updated"
+
+  [grpc_routes.cases.updated]
+  status  = 0
+  file    = "stubs/countries/{body.code}.json"
+  persist = true
+  merge   = "update"
+
+[[grpc_routes]]
+match = "/geography.GeographyService/GetCountry"
+fallback = "found"
+
+  [grpc_routes.cases.found]
+  file = "stubs/countries/{body.code}.json"

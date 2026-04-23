@@ -1,0 +1,9 @@
+# Runtime state wiped by run.sh on every iteration — do not track.
+stubs/**
+report/iteration-*.json
+report/iteration-*.jsonl
+report/iteration-*.log
+
+# Keep the directories themselves.
+!stubs/.gitkeep
+!report/.gitkeep
