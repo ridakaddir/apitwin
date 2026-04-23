@@ -47,7 +47,7 @@
 - **Record mode** — proxy a real API, save responses as stubs, replay offline
 - **OpenAPI generation** — generate a complete mock from any OpenAPI 3 spec
 - **Response transitions** — time-based state progression (e.g. `pending` → `approved`)
-- **Runtime state isolation** — mutations land in a gitignored `.apitwin/state/` mirror so seed stubs stay clean; `--ephemeral` uses a tempdir wiped on shutdown
+- **Runtime state isolation** — mutations land in a gitignored `.apitwin/state/` mirror so seed stubs stay clean; runtime state (POST creations, transition timers, pending background mutations) survives restarts by default; `--reset-runtime` wipes for a clean slate; `--ephemeral` uses a tempdir for throwaway sessions
 - **Multi-format config** — TOML, YAML, or JSON — auto-detected by file extension
 
 ---
@@ -203,6 +203,7 @@ Flags:
       --record                 Record mode: proxy and save responses as stubs
       --ephemeral              Mirror stubs into a tempdir wiped on shutdown
       --no-runtime-dir         Write mutations back to seed stubs (legacy)
+      --reset-runtime          Wipe .apitwin/state/ on start and re-mirror from seed
       --grpc-proto    <file>   Path to .proto file (starts gRPC server)
       --grpc-port     <n>      gRPC port (default: 50051)
       --grpc-target   <addr>   Upstream gRPC server for proxy mode

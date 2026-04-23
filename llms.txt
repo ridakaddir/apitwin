@@ -82,6 +82,7 @@ apitwin [flags]
 | `--record` | | | Record mode: proxy and save responses as stubs (requires `--target`) |
 | `--ephemeral` | | | Mirror stubs into a tempdir wiped on shutdown (no disk residue next to config) |
 | `--no-runtime-dir` | | | Write mutations back to seed stubs (legacy, dirties git) |
+| `--reset-runtime` | | | Wipe `.apitwin/state/` on start and re-mirror from seed (default preserves runtime-only stubs and persisted transition state across restarts) |
 | `--grpc-proto <file>` | | | Path to `.proto` file (repeatable; enables gRPC server) |
 | `--grpc-port <n>` | | `50051` | gRPC server port |
 | `--grpc-target <addr>` | | | Upstream gRPC server for proxy mode |
@@ -1098,15 +1099,23 @@ apitwin --config ./mocks
 
 Endpoints with `persist = true` mutate stub files on disk. By default, apitwin mirrors the whole config-dir tree into a gitignored `.apitwin/state/` directory next to the config on startup, and redirects every stub read and write there. The committed seed files in `stubs/` are never touched by request traffic — `git status` stays clean after a session.
 
+**Restarts preserve runtime state by default** (since v0.2.0-beta.21). Runtime-only stubs (POST creations), transition `FirstHit` timestamps, and pending deferred mutations all survive a restart. Seed files always win on overlap, so editing a seed stub and restarting flows the new content through to runtime. To force a clean re-mirror, pass `--reset-runtime` or run `apitwin reset`.
+
 ### Modes
 
-**Default (runtime mirror).** Nothing to configure. `.apitwin/state/` is created on startup, `.gitignore` is auto-updated if needed, and the mirror is wiped and recreated from the seed on every restart.
+**Default (persistent runtime mirror).** Nothing to configure. `.apitwin/state/` is created on first startup, `.gitignore` is auto-updated if needed, and on every subsequent start the seed is overlaid (seed wins on overlap) while runtime-only files persist.
 
 ```sh
 apitwin --config ./my-project
 ```
 
-**Ephemeral.** Use a tempdir instead, wiped on graceful shutdown. Nothing lands next to the config. Good for CI, demos, and throwaway sessions.
+**Force-reset on startup.** Wipes `.apitwin/state/` (including persisted transition + schedule metadata) and re-mirrors from seed before serving.
+
+```sh
+apitwin --config ./my-project --reset-runtime
+```
+
+**Ephemeral.** Use a tempdir instead, wiped on graceful shutdown. Nothing lands next to the config and nothing persists across runs. Good for CI, demos, and throwaway sessions.
 
 ```sh
 apitwin --config ./my-project --ephemeral
@@ -1120,25 +1129,44 @@ apitwin --config ./my-project --no-runtime-dir
 
 ### Resetting
 
-A restart always wipes and re-mirrors. To reset without restarting:
+A normal restart preserves runtime state. Choose one path to get back to seed-only:
 
 ```sh
+# Inline at startup
+apitwin --reset-runtime --config ./my-project
+
+# Subcommand (server stopped)
 apitwin reset --config ./my-project
 ```
+
+Both delete `.apitwin/state/` (including `.apitwin-meta/`) so the next run starts from seed, with no runtime-only stubs and no persisted transition state.
+
+### Persisted metadata
+
+Inside the runtime dir, `.apitwin-meta/` holds two JSON files:
+
+- `transitions.json` — `FirstHit` timestamps per scope (`rest`, `grpc`). Restored at startup so transition timelines do not restart from `t=0` after a restart.
+- `scheduled.json` — pending deferred mutations from background transitions, with each item's `fireAt`, file path, and eager-resolved payload. On boot, past-due items fire synchronously; future items re-arm with the remaining delay.
+
+Both are wiped on hot-reload, on `--reset-runtime`, and by `apitwin reset`.
 
 ### Directory layout
 
 ```
 my-project/
-├── apitwin.toml          # committed (seed)
-├── stubs/                # committed (seed, never mutated at runtime)
+├── apitwin.toml                      # committed (seed)
+├── stubs/                            # committed (seed, never mutated at runtime)
 │   └── users/1.json
 ├── .apitwin/
-│   └── state/            # gitignored runtime mirror
+│   └── state/                        # gitignored runtime mirror
+│       ├── .apitwin-runtime-v1       # version sentinel
+│       ├── .apitwin-meta/            # persisted transition + schedule state
+│       │   ├── transitions.json
+│       │   └── scheduled.json
 │       └── stubs/users/
-│           ├── 1.json    # runtime copy (mutations here)
-│           └── <uuid>.json
-└── .gitignore            # auto-includes .apitwin/state/
+│           ├── 1.json                # runtime copy (mutations here)
+│           └── <uuid>.json           # POST-created, runtime-only, survives restarts
+└── .gitignore                        # auto-includes .apitwin/state/
 ```
 
 ### Record mode interaction

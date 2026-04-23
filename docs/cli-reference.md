@@ -24,6 +24,7 @@ apitwin reset [flags]
 | `--record` | | | Record mode: proxy all requests and save responses as stubs |
 | `--ephemeral` | | | Mirror stubs into a tempdir wiped on shutdown (nothing persists between runs) |
 | `--no-runtime-dir` | | | Write mutations back to seed stubs — legacy mode, dirties git |
+| `--reset-runtime` | | | Wipe `.apitwin/state/` on start and re-mirror from seed (default preserves runtime-only stubs and persisted transition state across restarts) |
 
 ### gRPC server
 
@@ -75,7 +76,7 @@ Either `--spec` or `--proto` is required. `--proto` takes precedence if both are
 
 ### `reset`
 
-Delete the runtime state directory so the next run starts from a fresh mirror of the seed stubs.
+Delete the runtime state directory so the next run starts from a fresh mirror of the seed stubs. Clears runtime-only stubs (POST creations), persisted transition `FirstHit` timestamps, and pending scheduled mutations.
 
 ```sh
 apitwin reset [flags]
@@ -84,6 +85,8 @@ apitwin reset [flags]
 | Flag | Short | Default | Description |
 |---|---|---|---|
 | `--config <path>` | `-c` | `apitwin.toml` or `.` | Config file or directory (used to locate `.apitwin/state/`) |
+
+For an inline reset at server start without invoking the subcommand, pass `--reset-runtime` to the main command.
 
 When running in `--ephemeral` mode the runtime state is per-process and cleaned up on shutdown, so `reset` is a no-op.
 

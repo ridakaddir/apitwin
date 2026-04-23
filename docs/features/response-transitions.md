@@ -188,7 +188,8 @@ t = 15s  background mutation → merges {"status": "verified"} into the file
 - Each POST spawns **independent background goroutines** — file mutations for different resources happen independently on disk
 - **Shared timeline per route pattern** — the transition clock is shared across all resource IDs on the same route (see [below](#transition-state-and-multiple-resources))
 - **Hot reload** cancels all pending background mutations
-- **Server shutdown** waits for pending mutations to finish gracefully
+- **Server shutdown** waits for pending mutations to finish gracefully — and any unfired ones are persisted under `.apitwin/state/.apitwin-meta/scheduled.json`, then re-armed on the next start (past-due items fire synchronously at boot). See [Runtime State Isolation](runtime-state.md).
+- **Eager defaults resolution** — when a transition is scheduled, its `defaults` file is resolved to a concrete payload at scheduling time (not at fire time). Cross-endpoint references and dynamic tokens like `{{uuid}}` and `{{now}}` therefore freeze at the moment the resource is created. This is almost always what you want (the "ready" payload reflects the resource as it was created), but it's worth knowing if you previously relied on tokens re-evaluating when the timer fires.
 - If the file is deleted before a transition fires, the mutation is skipped (logged as a warning)
 - **DELETE resets transitions** — when a DELETE route with `merge = "delete"` removes a resource, the transition clock for that route pattern is reset so subsequent POSTs start fresh
 
