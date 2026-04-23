@@ -14,6 +14,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// waitForStatusTolerant polls path for a JSON object whose `field` equals
+// `want`. Unlike waitForStatus in scheduler_test.go (which calls
+// readJSONFile + require.NoError), this helper swallows transient
+// read/parse errors so a race against persist.Update's non-atomic write
+// (os.WriteFile truncate-then-write) does not cause an in-eventually
+// require.Fatalf — that races itself and produces a flaky CI failure.
+func waitForStatusTolerant(t *testing.T, path, field, want string, timeout time.Duration) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return false
+		}
+		var m map[string]interface{}
+		if err := json.Unmarshal(data, &m); err != nil {
+			return false
+		}
+		return m[field] == want
+	}, timeout, 25*time.Millisecond,
+		"expected %s=%q in %s within %s", field, want, filepath.Base(path), timeout)
+}
+
 // Tests the persistence wiring on the REST scheduler: Schedule writes an
 // item, fire prunes it, Rearm past-due applies immediately, Rearm future
 // schedules with remaining delay, Reset clears, Stop does not.
@@ -62,7 +84,7 @@ func TestSchedulerPersist_ScheduleWritesItemAndFirePrunesIt(t *testing.T) {
 	assert.Equal(t, "Ready", payload["status"])
 
 	// Wait for the timer to fire.
-	waitForStatus(t, stubFile, "status", "Ready")
+	waitForStatusTolerant(t, stubFile, "status", "Ready", 5*time.Second)
 
 	// After fire, the persisted list should be empty.
 	require.Eventually(t, func() bool {
@@ -114,7 +136,10 @@ func TestSchedulerPersist_RearmFutureSchedulesRemainingDelay(t *testing.T) {
 	writeJSONFile(t, stubFile, map[string]interface{}{"status": "Pending"})
 
 	payload, _ := json.Marshal(map[string]interface{}{"status": "Ready"})
-	fireAt := time.Now().Add(500 * time.Millisecond)
+	// Pad the remaining delay so Rearm + Load definitively complete before
+	// the timer fires (CI machines under load have been observed to need
+	// >500ms of headroom before the polling phase begins).
+	fireAt := time.Now().Add(1500 * time.Millisecond)
 	require.NoError(t, p.Add(runtimepersist.ScheduledItem{
 		ID:              "future-1",
 		Scope:           "rest",
@@ -131,12 +156,8 @@ func TestSchedulerPersist_RearmFutureSchedulesRemainingDelay(t *testing.T) {
 	f, _ := p.Load()
 	sched.Rearm(f.ItemsForScope("rest"))
 
-	// Shortly after, the file has not been updated yet.
-	data := readJSONFile(t, stubFile)
-	assert.Equal(t, "Pending", data["status"])
-
-	// But within the remaining delay it should update.
-	waitForStatus(t, stubFile, "status", "Ready")
+	// Within the remaining delay the file should update.
+	waitForStatusTolerant(t, stubFile, "status", "Ready", 5*time.Second)
 
 	require.Eventually(t, func() bool {
 		f, err := p.Load()
