@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package geography;
+option go_package = "github.com/ridakaddir/apitwin/qa/geography";
+
+// Minimal proto targeted at the "repeated UpdateWrapped fails after N calls"
+// bug. Two parallel lanes:
+//
+//   Wrapped lane:
+//     CreateCountryWrapped(CreateCountryRequest) returns (CountryEnvelope)
+//     UpdateCountryWrapped(UpdateCountryWrappedRequest) returns (CountryEnvelope)
+//     GetCountryWrapped(GetCountryRequest) returns (CountryEnvelope)
+//
+//   Unwrapped control lane:
+//     CreateCountry(CreateCountryRequest) returns (Country)
+//     UpdateCountry(UpdateCountryRequest) returns (Country)
+//     GetCountry(GetCountryRequest) returns (Country)
+//
+// The wrapped Update takes a CountryEnvelope-shaped request so source="country"
+// extraction and wrap="country" response inference both make sense; this mirrors
+// the Google API convention (UpdateGatewayRequest { Gateway gateway = ...; }).
+service GeographyService {
+  rpc CreateCountry(CreateCountryRequest) returns (Country);
+  rpc GetCountry(GetCountryRequest) returns (Country);
+  rpc UpdateCountry(UpdateCountryRequest) returns (Country);
+
+  rpc CreateCountryWrapped(CreateCountryRequest) returns (CountryEnvelope);
+  rpc GetCountryWrapped(GetCountryRequest) returns (CountryEnvelope);
+  rpc UpdateCountryWrapped(UpdateCountryWrappedRequest) returns (CountryEnvelope);
+
+  // Wrapped response, FLAT request (common misconfiguration / alternate shape):
+  // the client sends {code,name,...} against a route configured with
+  // wrap="country" but no source — auto-derive falls back to "response wraps
+  // a single entity" and tries to find a matching request field of type Country.
+  // With a flat request (no Country-typed field) auto-derive returns (""," ",false)
+  // and source remains empty. Tests what happens when wrap is inferred from
+  // response shape but source is genuinely empty.
+  rpc UpdateCountryFlatToWrapped(UpdateCountryRequest) returns (CountryEnvelope);
+}
+
+message Country {
+  string code = 1;
+  string name = 2;
+  string status = 3;
+  string continent = 4;
+}
+
+message CountryEnvelope {
+  Country country = 1;
+}
+
+message CreateCountryRequest {
+  string code = 1;
+  string name = 2;
+  string continent = 3;
+}
+
+message GetCountryRequest {
+  string code = 1;
+}
+
+message UpdateCountryRequest {
+  string code = 1;
+  string name = 2;
+  string status = 3;
+  string continent = 4;
+}
+
+// Wrapped-update request: the canonical Google-API style (entity lives in a
+// nested "country" field). With wrap="country" configured on the route and
+// auto-derive enabled, applyGRPCPersist extracts `body.country`, filters to
+// the Country field set, merges into the stub, then wraps the result back.
+message UpdateCountryWrappedRequest {
+  Country country = 1;
+}
