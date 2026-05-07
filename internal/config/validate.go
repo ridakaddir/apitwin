@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -10,13 +11,6 @@ import (
 // registry). REST has no schema, so its validator does structural-only
 // checks and never queries this interface.
 type PersistSchema interface {
-	// EntityFields returns the JSON+proto field-name set for the entity
-	// addressed by routeMatch + wrap. ok=false means "no schema known for
-	// this route" — validator skips entity-keyed checks. When wrap is
-	// empty, callers may pass "" to ask for the response output type's
-	// own field set (Shape 1 direct-entity).
-	EntityFields(routeMatch, wrap string) (set map[string]bool, ok bool)
-
 	// DeriveWrapSource returns the auto-derived wrap and source for the
 	// route. ambiguous=true means the schema reports multiple possible
 	// matches — caller should treat this as "unresolved." ok=false means
@@ -45,11 +39,12 @@ func (e ValidationError) Error() string {
 	return fmt.Sprintf("route %q case %q: %s", e.Route, e.Case, e.Reason)
 }
 
-// FormatValidationErrors joins a list of ValidationErrors into a multi-line
-// punch list ready to surface to the user.
-func FormatValidationErrors(errs []ValidationError) string {
+// AsError joins a list of ValidationErrors into a single error whose
+// Error() text is a multi-line punch list ready to surface to the user.
+// Returns nil for an empty list.
+func AsError(errs []ValidationError) error {
 	if len(errs) == 0 {
-		return ""
+		return nil
 	}
 	var b strings.Builder
 	b.WriteString("config validation failed:\n")
@@ -58,7 +53,7 @@ func FormatValidationErrors(errs []ValidationError) string {
 		b.WriteString(e.Error())
 		b.WriteString("\n")
 	}
-	return b.String()
+	return errors.New(b.String())
 }
 
 // ValidateGRPCRoutes walks every gRPC route and returns the list of

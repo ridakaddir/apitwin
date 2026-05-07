@@ -8,17 +8,9 @@ import (
 // fakeSchema implements PersistSchema for unit-testing the validator
 // without dragging proto dependencies into the config package.
 type fakeSchema struct {
-	multi   map[string]bool          // routeMatch → has multi-message response
-	derived map[string][3]string     // routeMatch → [wrap, source, ambiguous]
-	known   map[string]bool          // routeMatch present in schema
-	fields  map[string]map[string]bool
-}
-
-func (s *fakeSchema) EntityFields(routeMatch, wrap string) (map[string]bool, bool) {
-	if !s.known[routeMatch] {
-		return nil, false
-	}
-	return s.fields[routeMatch+"|"+wrap], true
+	multi   map[string]bool      // routeMatch → has multi-message response
+	derived map[string][3]string // routeMatch → [wrap, source, ambiguous("1"|"0")]
+	known   map[string]bool      // routeMatch present in schema
 }
 
 func (s *fakeSchema) DeriveWrapSource(routeMatch string) (string, string, bool, bool) {

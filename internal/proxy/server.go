@@ -117,9 +117,9 @@ func NewServer(opts ServerOptions) (*Server, error) {
 	// safeguard in applyPersist — there's no schema here to know what
 	// "valid wrap" means.
 	if cfg := loader.Get(); cfg != nil {
-		if errs := config.ValidateRESTRoutes(cfg.Routes); len(errs) > 0 {
+		if err := config.AsError(config.ValidateRESTRoutes(cfg.Routes)); err != nil {
 			loader.Close()
-			return nil, fmt.Errorf("%s", config.FormatValidationErrors(errs))
+			return nil, err
 		}
 	}
 

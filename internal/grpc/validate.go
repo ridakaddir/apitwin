@@ -16,18 +16,6 @@ func NewSchema(reg *Registry) config.PersistSchema {
 	return &schemaAdapter{reg: reg}
 }
 
-func (s *schemaAdapter) EntityFields(routeMatch, wrap string) (map[string]bool, bool) {
-	md, _ := s.reg.FindMethod(routeMatch)
-	if md == nil {
-		return nil, false
-	}
-	if wrap == "" {
-		return entityFieldsFromType(md.GetOutputType()), true
-	}
-	set := s.reg.EntityFieldNames(md, wrap)
-	return set, set != nil
-}
-
 func (s *schemaAdapter) DeriveWrapSource(routeMatch string) (string, string, bool, bool) {
 	md, _ := s.reg.FindMethod(routeMatch)
 	if md == nil {

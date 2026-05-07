@@ -103,39 +103,13 @@ func (h *handler) applyGRPCPersist(
 	// to only fields valid in the entity message. This prevents routing
 	// fields from the request (e.g. orgId, providerId) from leaking into
 	// the persisted stub and causing proto encoding failures on the
-	// response.
+	// response. Pre-allocated here so the merge=update safeguard below
+	// can reuse the result without rebuilding the map.
+	var allowedEntityFields map[string]bool
 	if wrapField != "" && md != nil {
-		if allowed := h.registry.EntityFieldNames(md, wrapField); allowed != nil {
-			persistData = filterToEntityFields(persistData, allowed)
-		}
-	}
-
-	// Defense-in-depth: even after filtering, refuse to write a payload
-	// whose top-level keys are not valid for the response entity schema.
-	// This catches misconfigurations the validator and inheritance layers
-	// missed — the stub file must NEVER end up holding fields the proto
-	// response message doesn't know, because that breaks proto round-trip
-	// on every subsequent read of the same file.
-	//
-	// When wrap is set: keys are checked against EntityFieldNames(md, wrap).
-	// When wrap is empty (e.g. direct-entity Shape 1, or auto-derive
-	// returned blind): keys are checked against the response output type's
-	// own field set. Either way, the file is not touched on rejection.
-	if (strings.EqualFold(c.Merge, "update") || strings.EqualFold(c.Merge, "append")) && md != nil {
-		var allowed map[string]bool
-		if wrapField != "" {
-			allowed = h.registry.EntityFieldNames(md, wrapField)
-		} else {
-			allowed = entityFieldsFromType(md.GetOutputType())
-		}
-		if allowed != nil {
-			if extras := keysNotIn(persistData, allowed); len(extras) > 0 {
-				logger.Error("grpc persist refused: payload has fields not present in entity schema",
-					"method", fullMethod, "file", filePath, "extras", extras,
-					"wrap", wrapField, "source", sourceField)
-				logger.LogGRPC(fullMethod, codes.Internal, time.Since(start), logger.SourceStub)
-				return codes.Internal, true, nil, ""
-			}
+		allowedEntityFields = h.registry.EntityFieldNames(md, wrapField)
+		if allowedEntityFields != nil {
+			persistData = filterToEntityFields(persistData, allowedEntityFields)
 		}
 	}
 
@@ -144,6 +118,34 @@ func (h *handler) applyGRPCPersist(
 	case "update":
 		// Apply defaults if specified (enrich incoming data before persisting).
 		persistData = loadGRPCDefaults(c.Defaults, persistData, reqMap, configDir)
+
+		// Defense-in-depth: refuse to write a payload whose top-level keys
+		// are not valid for the response entity schema. This runs AFTER
+		// loadGRPCDefaults so a defaults file with stray non-entity keys
+		// cannot slip past. Scoped to merge=update because that is the
+		// shape from the bug report; merge=append already round-trips its
+		// payload through filterToEntityFields above and tightening it
+		// would break existing append users with metadata sidecars.
+		//
+		// When wrap is set: reuse the entity-field set from above. When
+		// wrap is empty (Shape 1 direct-entity or auto-derive blind):
+		// fall back to the response output type's own field set.
+		if md != nil {
+			allowed := allowedEntityFields
+			if allowed == nil && wrapField == "" {
+				allowed = entityFieldsFromType(md.GetOutputType())
+			}
+			if allowed != nil {
+				if extras := keysNotIn(persistData, allowed); len(extras) > 0 {
+					logger.Error("grpc persist refused: payload has fields not present in entity schema",
+						"method", fullMethod, "file", filePath, "extras", extras,
+						"wrap", wrapField, "source", sourceField)
+					logger.LogGRPC(fullMethod, codes.Internal, time.Since(start), logger.SourceStub)
+					return codes.Internal, true, nil, ""
+				}
+			}
+		}
+
 		updated, err := persist.Update(filePath, persistData)
 		if err != nil {
 			if persist.IsNotFound(err) {

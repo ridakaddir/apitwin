@@ -434,11 +434,17 @@ func uniqueNonRepeatedMessageField(outType *desc.MessageDescriptor) *desc.FieldD
 // uniqueNonRepeatedMessageField returns nil because there are multiple
 // candidates: enumerating them lets the caller correlate against the
 // request input type to pick the "real" entity.
+//
+// Repeated and map fields are SKIPPED (not bailed on). A response with a
+// sibling `repeated Operation operations` alongside the entity must still
+// surface the non-repeated message candidates — otherwise Shape 3 and the
+// startup validator would silently give such routes a free pass on the
+// exact dangerous shape this code is meant to catch.
 func candidateMessageFields(outType *desc.MessageDescriptor) []*desc.FieldDescriptor {
 	var out []*desc.FieldDescriptor
 	for _, f := range outType.GetFields() {
 		if f.IsRepeated() || f.IsMap() {
-			return nil
+			continue
 		}
 		if f.GetMessageType() == nil {
 			continue

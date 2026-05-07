@@ -81,20 +81,42 @@ fallback = "u"
   merge   = "update"
 EOF
 
-# Run apitwin and capture exit + stderr. Use a fresh ephemeral binary path
-# resolved from $BINARY (set by run.sh).
+# Run apitwin with a portable bash-native timeout. macOS does not ship
+# `timeout(1)` by default, so we background the process and a watchdog
+# that SIGKILLs it after 8s if it has not exited on its own. Without this
+# guard, a validator regression that lets the binary actually start would
+# block the scenario on Serve() forever and hang the whole iteration.
 log_file="$bad_dir/apitwin.stderr"
-set +e
 "$BINARY" --config "$bad_dir" \
   --grpc-proto "$bad_dir/ambiguous.proto" \
   --grpc-port 65431 --port 65432 \
-  --no-runtime-dir > "$bad_dir/apitwin.stdout" 2> "$log_file"
+  --no-runtime-dir > "$bad_dir/apitwin.stdout" 2> "$log_file" &
+apitwin_pid=$!
+( sleep 8; kill -9 "$apitwin_pid" 2>/dev/null ) &
+watchdog_pid=$!
+set +e
+wait "$apitwin_pid"
 rc=$?
 set -e
+kill "$watchdog_pid" 2>/dev/null || true
+wait "$watchdog_pid" 2>/dev/null || true
 
 # Best-effort cleanup of any stray process (the validator should have
 # refused to start, so usually nothing to kill — but be defensive).
 pkill -f "$bad_dir" 2>/dev/null || true
+
+# rc=137 (128 + SIGKILL) means the watchdog had to fire — validation
+# regressed and the server stayed up past the deadline. Surface it
+# explicitly so a regression fails the suite rather than blending into
+# the "different error" path below.
+if [[ $rc -eq 137 ]] || [[ $rc -eq 143 ]]; then
+  SCENARIO_DURATION_MS=$(scenario_elapsed_ms)
+  record_result "$SCENARIO_ID" fail "$EXPECTED" \
+    "apitwin did not exit within 8s — validator regression: server actually started (rc=$rc)" \
+    "ValidateGRPCRoutes failed to flag the multi-message-response sparse-case shape."
+  rm -rf "$bad_dir"
+  return 0 2>/dev/null || exit 0
+fi
 
 if [[ $rc -eq 0 ]]; then
   SCENARIO_DURATION_MS=$(scenario_elapsed_ms)
