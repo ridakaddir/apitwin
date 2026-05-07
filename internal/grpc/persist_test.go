@@ -1113,28 +1113,50 @@ func TestResponseWrapForSource_PicksFieldMatchingSource(t *testing.T) {
 }
 
 // TestCandidateMessageFields_SkipsRepeatedSiblings pins the senior-review
-// fix: a response with a sibling repeated field must NOT silently disable
-// Shape 3 + the validator. uniqueNonRepeatedMessageField (Shape 2) still
-// bails because that's the legacy "single wrapper" check. But
-// candidateMessageFields must surface every non-repeated message candidate
-// regardless of repeated/map siblings, so the validator catches the
-// dangerous shape and Shape 3 gets a chance to correlate.
+// fix: a response with sibling repeated fields must NOT silently disable
+// Shape 3 + the validator. Pre-fix `return nil` on the repeated would
+// have produced 0 candidates; post-fix skipping it surfaces the two
+// non-repeated message fields.
 func TestCandidateMessageFields_SkipsRepeatedSiblings(t *testing.T) {
 	reg := loadLROTestRegistry(t)
-	// Use an existing fixture and confirm baseline: UpdateCountryResponse
-	// has 3 scalars + 2 message fields (country, audit), no repeated → 2
-	// candidates.
+
+	// Baseline (no repeated siblings): 3 scalars + country + audit → 2.
 	md, _ := reg.FindMethod("/lro.v1.CountryService/UpdateCountry")
 	if got := candidateMessageFields(md.GetOutputType()); len(got) != 2 {
-		t.Errorf("baseline candidateMessageFields = %d, want 2", len(got))
+		t.Errorf("baseline candidates = %d, want 2", len(got))
 	}
-	// The pre-fix bug surfaces only on a response with repeated siblings,
-	// which our test protos do not have. Pin the property
-	// programmatically: we trust the loop body above and assert that
-	// repeated-only responses (ListDatabaseInstancesResponse-style) do NOT
-	// accidentally surface candidates from repeated fields, while a mix
-	// would. The unit-level guarantee is encoded by the doc comment + the
-	// implementation skip; the QA harness covers the integrated path.
+
+	// The fix target: ProvisionCountryResponse has region_id (scalar),
+	// country (msg), audit (msg), repeated string warnings. With the fix
+	// candidates is [country, audit]; pre-fix it would have been nil.
+	md, _ = reg.FindMethod("/lro.v1.CountryService/ProvisionCountry")
+	cands := candidateMessageFields(md.GetOutputType())
+	if len(cands) != 2 {
+		t.Fatalf("ProvisionCountryResponse candidates = %d, want 2 "+
+			"(repeated sibling must be skipped, not bail)", len(cands))
+	}
+	got := map[string]bool{}
+	for _, f := range cands {
+		got[f.GetJSONName()] = true
+	}
+	if !got["country"] || !got["audit"] {
+		t.Errorf("expected {country, audit} candidates, got %v", got)
+	}
+}
+
+// TestRequestEntity_Shape3WithRepeatedSibling closes the loop end-to-end:
+// the repeated-sibling response shape must auto-derive correctly via Shape
+// 3 correlation (only Country appears in the request, not AuditTrail).
+func TestRequestEntity_Shape3WithRepeatedSibling(t *testing.T) {
+	reg := loadLROTestRegistry(t)
+	md, _ := reg.FindMethod("/lro.v1.CountryService/ProvisionCountry")
+	src, wrap, amb := reg.RequestEntity(md)
+	if amb {
+		t.Error("expected ambiguous=false")
+	}
+	if src != "country" || wrap != "country" {
+		t.Errorf("RequestEntity = (%q, %q, %v), want (country, country, false)", src, wrap, amb)
+	}
 }
 
 // TestApplyGRPCPersist_AutoDerivesOnLROResponseShape is the end-to-end

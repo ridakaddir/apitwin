@@ -84,12 +84,21 @@ func NewServer(opts ServerOptions) (*Server, error) {
 			if !r.IsEnabled() {
 				continue
 			}
-			if strings.Contains(r.Match, "*") || strings.HasPrefix(r.Match, "~") {
-				skipped++
+			if !strings.Contains(r.Match, "*") && !strings.HasPrefix(r.Match, "~") {
+				continue
+			}
+			// Only count the route if it has at least one persist+update
+			// case — otherwise skipping its schema check is a no-op and
+			// surfacing it in the log is noise.
+			for _, c := range r.Cases {
+				if c.Persist && strings.EqualFold(c.Merge, "update") {
+					skipped++
+					break
+				}
 			}
 		}
 		if skipped > 0 {
-			logger.Info("grpc validate: schema-driven checks skipped for wildcard / regex routes",
+			logger.Info("grpc validate: schema-driven checks skipped for wildcard / regex routes with persist+update cases",
 				"count", skipped)
 		}
 		if err := config.AsError(config.ValidateGRPCRoutes(cfg.GRPCRoutes, NewSchema(registry))); err != nil {

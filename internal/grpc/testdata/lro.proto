@@ -16,12 +16,19 @@ service CountryService {
   // Shape 3 fixture: response has 3 scalars + 2 message fields. Only
   // `country`'s type appears in the request, so correlation picks `country`
   // as both source and wrap.
-  rpc UpdateCountry  (UpdateCountryRequest)  returns (UpdateCountryResponse);
+  rpc UpdateCountry    (UpdateCountryRequest)    returns (UpdateCountryResponse);
 
   // Shape 3 ambiguity guard: response has 2 message fields whose types each
   // also appear as a unique field on the request — auto-derive must bail
   // out and signal ambiguity rather than guess.
-  rpc MergeCountries (MergeCountriesRequest) returns (UpdateCountryResponse);
+  rpc MergeCountries   (MergeCountriesRequest)   returns (UpdateCountryResponse);
+
+  // Repeated-sibling fixture: response has 2 non-repeated message fields
+  // (country, audit) AND a sibling `repeated string warnings`. Pre-fix
+  // candidateMessageFields bailed on the repeated and returned nil,
+  // silently disabling Shape 3 + validator coverage. Post-fix it skips the
+  // repeated and surfaces both message candidates.
+  rpc ProvisionCountry (ProvisionCountryRequest) returns (ProvisionCountryResponse);
 }
 
 message Country {
@@ -60,3 +67,15 @@ message MergeCountriesRequest {
   Country    primary = 1;
   AuditTrail audit   = 2;
 }
+
+message ProvisionCountryRequest {
+  Country country = 1;
+}
+
+message ProvisionCountryResponse {
+  string             region_id = 1;
+  Country            country   = 2;
+  AuditTrail         audit     = 3;
+  repeated string    warnings  = 4;
+}
+

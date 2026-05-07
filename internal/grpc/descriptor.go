@@ -436,10 +436,18 @@ func uniqueNonRepeatedMessageField(outType *desc.MessageDescriptor) *desc.FieldD
 // request input type to pick the "real" entity.
 //
 // Repeated and map fields are SKIPPED (not bailed on). A response with a
-// sibling `repeated Operation operations` alongside the entity must still
-// surface the non-repeated message candidates — otherwise Shape 3 and the
-// startup validator would silently give such routes a free pass on the
-// exact dangerous shape this code is meant to catch.
+// sibling `repeated Operation operations` alongside two non-repeated
+// message fields still surfaces both candidates so Shape 3 + the startup
+// validator can correlate.
+//
+// Known asymmetry with uniqueNonRepeatedMessageField (Shape 2): Shape 2
+// still bails on any repeated/map sibling. Combined with Shape 3's
+// `len(candidates) >= 2` guard, the shape `{repeated Foo; Bar bar}` (one
+// non-repeated message + one repeated sibling) is auto-derived as blind
+// — Shape 2 bails, Shape 3 has only 1 candidate. Such a route would need
+// explicit `wrap`/`source` to persist correctly. Acceptable: response
+// envelope clobbering needs at least two non-repeated fields to produce
+// the bug shape.
 func candidateMessageFields(outType *desc.MessageDescriptor) []*desc.FieldDescriptor {
 	var out []*desc.FieldDescriptor
 	for _, f := range outType.GetFields() {
