@@ -143,7 +143,7 @@ func (h *handler) serve(srv interface{}, stream grpc.ServerStream) error {
 			break
 		}
 
-		c, ok := route.Cases[caseName]
+		c, ok := config.ResolveCase(route.Cases, caseName, route.Fallback)
 		if !ok {
 			logger.Warn("grpc case not found", "case", caseName, "method", fullMethod)
 			break
@@ -159,7 +159,7 @@ func (h *handler) serve(srv interface{}, stream grpc.ServerStream) error {
 				// fallback case. This mirrors the HTTP proxy behaviour.
 				isTransitionCase := caseName != route.Fallback && len(route.Transitions) > 0
 				if grpcCode == codes.NotFound && isTransitionCase {
-					if fc, fbOK := route.Cases[route.Fallback]; fbOK && fc.Persist {
+					if fc, fbOK := config.ResolveCase(route.Cases, route.Fallback, route.Fallback); fbOK && fc.Persist {
 						activeCase = fc
 						grpcCode, ok, persistResult, persistedPath = h.applyGRPCPersist(activeCase, reqMap, start, fullMethod, md)
 						if !ok {

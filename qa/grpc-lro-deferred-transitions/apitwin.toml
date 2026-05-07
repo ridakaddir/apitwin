@@ -1,0 +1,60 @@
+# QA harness: gRPC LRO deferred transitions — reproduces the bug where a
+# sparse transition case on a Google-LRO-style response shape leaks the
+# request envelope into the persisted stub. The route mirrors the user's
+# reported config (UpdateDatabaseInstance) renamed to the continent /
+# country / city domain.
+#
+# Transition timeline:
+#   t = 0s  → fallback ("updated"): explicit wrap+source, status NOTREADY
+#   t = 0..2s → still on fallback (the "updating" transition has no case
+#               in route.Cases so the resolver falls through to fallback)
+#   t = 2s  → deferred transition fires, applying defaults/country-ready.json
+#             onto the file (background mutation by the scheduler)
+#   t ≥ 2s  → time-based case resolution returns "ready" — the dangerous
+#             moment. With the fix, the sparse `ready` case must inherit
+#             wrap+source from `updated` AND auto-derive must independently
+#             agree (Shape 3 correlation).
+
+[[grpc_routes]]
+match    = "/geo.lro.CountryService/UpdateCountry"
+enabled  = true
+fallback = "updated"
+
+  [[grpc_routes.transitions]]
+  case     = "updating"
+  duration = 2
+
+  [[grpc_routes.transitions]]
+  case = "ready"
+
+  [grpc_routes.cases.updated]
+  status   = 0
+  file     = "stubs/countries_lro/{body.id}.json"
+  persist  = true
+  merge    = "update"
+  wrap     = "country"
+  source   = "country"
+  defaults = "defaults/country-updating.json"
+
+  [grpc_routes.cases.ready]
+  # INTENTIONALLY sparse — mirrors the user's `ready` transition case in
+  # the bug report. With the fix this case must:
+  #   (a) inherit wrap+source from the fallback `updated` case, AND
+  #   (b) auto-derive Shape 3 correlation as a backstop.
+  # Pre-fix the file would be corrupted on any client UpdateCountry call
+  # that lands here (i.e. any call later than 2s after first request).
+  status   = 0
+  file     = "stubs/countries_lro/{body.id}.json"
+  persist  = true
+  merge    = "update"
+  defaults = "defaults/country-ready.json"
+
+[[grpc_routes]]
+match    = "/geo.lro.CountryService/GetCountry"
+enabled  = true
+fallback = "found"
+
+  [grpc_routes.cases.found]
+  status = 0
+  file   = "stubs/countries_lro/{body.id}.json"
+  wrap   = "country"

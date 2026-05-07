@@ -73,6 +73,12 @@ func (h *handler) applyGRPCPersist(
 		// entity directly into the outer response message and fails proto
 		// round-trip on encode ("no known field named <entity-field>").
 		wrapField = h.registry.ResponseWrap(md)
+		if wrapField == "" {
+			// ResponseWrap returns "" for multi-message responses (e.g.
+			// LRO shapes with sibling status/audit/resource fields). Use
+			// the explicit source to pick the right wrapper.
+			wrapField = h.registry.ResponseWrapForSource(md, sourceField)
+		}
 	}
 	srcMap := reqMap
 	if sourceField != "" {
@@ -101,6 +107,35 @@ func (h *handler) applyGRPCPersist(
 	if wrapField != "" && md != nil {
 		if allowed := h.registry.EntityFieldNames(md, wrapField); allowed != nil {
 			persistData = filterToEntityFields(persistData, allowed)
+		}
+	}
+
+	// Defense-in-depth: even after filtering, refuse to write a payload
+	// whose top-level keys are not valid for the response entity schema.
+	// This catches misconfigurations the validator and inheritance layers
+	// missed — the stub file must NEVER end up holding fields the proto
+	// response message doesn't know, because that breaks proto round-trip
+	// on every subsequent read of the same file.
+	//
+	// When wrap is set: keys are checked against EntityFieldNames(md, wrap).
+	// When wrap is empty (e.g. direct-entity Shape 1, or auto-derive
+	// returned blind): keys are checked against the response output type's
+	// own field set. Either way, the file is not touched on rejection.
+	if (strings.EqualFold(c.Merge, "update") || strings.EqualFold(c.Merge, "append")) && md != nil {
+		var allowed map[string]bool
+		if wrapField != "" {
+			allowed = h.registry.EntityFieldNames(md, wrapField)
+		} else {
+			allowed = entityFieldsFromType(md.GetOutputType())
+		}
+		if allowed != nil {
+			if extras := keysNotIn(persistData, allowed); len(extras) > 0 {
+				logger.Error("grpc persist refused: payload has fields not present in entity schema",
+					"method", fullMethod, "file", filePath, "extras", extras,
+					"wrap", wrapField, "source", sourceField)
+				logger.LogGRPC(fullMethod, codes.Internal, time.Since(start), logger.SourceStub)
+				return codes.Internal, true, nil, ""
+			}
 		}
 	}
 
@@ -169,6 +204,39 @@ func (h *handler) applyGRPCPersist(
 		logger.LogGRPC(fullMethod, codes.Internal, time.Since(start), logger.SourceStub)
 		return codes.Internal, true, nil, ""
 	}
+}
+
+// entityFieldsFromType returns the JSON+proto field-name set of mt, used by
+// the persist runtime safeguard when no `wrap` is in play (Shape 1
+// direct-entity responses, or auto-derive blind). Returns nil when mt is nil
+// or has zero fields.
+func entityFieldsFromType(mt *desc.MessageDescriptor) map[string]bool {
+	if mt == nil {
+		return nil
+	}
+	fields := mt.GetFields()
+	if len(fields) == 0 {
+		return nil
+	}
+	allowed := make(map[string]bool, len(fields)*2)
+	for _, f := range fields {
+		allowed[f.GetJSONName()] = true
+		allowed[f.GetName()] = true
+	}
+	return allowed
+}
+
+// keysNotIn returns the keys of data that are NOT in allowed. Used by the
+// persist runtime safeguard to identify entity-schema violations before the
+// file is written. Returns nil when no extras exist.
+func keysNotIn(data map[string]interface{}, allowed map[string]bool) []string {
+	var extras []string
+	for k := range data {
+		if !allowed[k] {
+			extras = append(extras, k)
+		}
+	}
+	return extras
 }
 
 // filterToEntityFields returns a shallow copy of data containing only keys

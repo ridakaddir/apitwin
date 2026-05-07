@@ -79,6 +79,23 @@ func applyPersist(w http.ResponseWriter, r *http.Request, c config.Case, bodyByt
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load defaults"})
 			return true, ""
 		}
+		// Defense-in-depth: refuse to write a payload that contains the wrap
+		// key as a top-level field. That shape — `{"wrap_key": {entity}}`
+		// merged into a flat entity stub — is the corruption shape from the
+		// gRPC bug report (it produces a nested duplicate wrapper plus
+		// routing fields), and the equivalent applies to REST when a route
+		// case omits `source` but sets `wrap`. The file is not touched on
+		// rejection.
+		if c.Wrap != "" {
+			if _, hasWrap := incoming[c.Wrap]; hasWrap {
+				logger.Error("persist refused: payload contains the wrap key as a top-level field",
+					"route", routePattern, "file", filePath, "wrap", c.Wrap)
+				writeJSON(w, http.StatusInternalServerError, map[string]string{
+					"error": "persist payload conflicts with wrap key — set source to extract the entity",
+				})
+				return true, ""
+			}
+		}
 		updated, err := persist.Update(filePath, incoming)
 		if err != nil {
 			if persist.IsNotFound(err) {

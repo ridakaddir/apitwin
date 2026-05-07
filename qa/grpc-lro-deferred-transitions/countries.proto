@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+// QA fixture for the Google long-running-operation (LRO) response shape that
+// triggered the user's reported deferred-transition corruption: the response
+// carries metadata SCALARS (region/charter/locale) alongside the entity AND
+// a sibling AuditTrail message field. This shape defeats the strict
+// uniqueNonRepeatedMessageField check (multiple message candidates) and
+// requires Shape 3 request-side correlation to auto-derive correctly.
+//
+// Domain: continent / country / city, matching the rest of the QA suite.
+
+package geo.lro;
+option go_package = "github.com/ridakaddir/apitwin/qa/geo/lro";
+
+service CountryService {
+  // The headline RPC: Shape 3 must derive ("country", "country", false) so a
+  // sparse `ready` transition case persists cleanly even after the
+  // transition window elapses.
+  rpc UpdateCountry (UpdateCountryRequest) returns (UpdateCountryResponse);
+
+  // Read-back so scenarios can assert the persisted file proto-roundtrips
+  // through the LRO response message without errors.
+  rpc GetCountry    (GetCountryRequest)    returns (UpdateCountryResponse);
+}
+
+message Country {
+  string code       = 1;
+  string name       = 2;
+  string continent  = 3;
+  int64  population = 4;
+  string state      = 5;   // "provisioning" → "ready" via deferred transition
+}
+
+// Sibling metadata message — present in the response but NOT in the
+// UpdateCountryRequest input, so Shape 3 correlation must NOT pick it.
+message AuditTrail {
+  string actor = 1;
+  string note  = 2;
+}
+
+message UpdateCountryRequest {
+  string  region_id  = 1;
+  string  charter_id = 2;
+  string  locale     = 3;
+  string  id         = 4;   // routing identifier — must NOT leak into stub
+  Country country    = 5;
+}
+
+message UpdateCountryResponse {
+  string     region_id  = 1;
+  string     charter_id = 2;
+  string     locale     = 3;
+  Country    country    = 4;
+  AuditTrail audit      = 5;
+}
+
+message GetCountryRequest {
+  string region_id  = 1;
+  string charter_id = 2;
+  string locale     = 3;
+  string id         = 4;
+}

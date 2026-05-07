@@ -1,0 +1,62 @@
+syntax = "proto3";
+package lro.v1;
+option go_package = "github.com/example/lro/v1";
+
+// Test fixture for the Google long-running-operation (LRO) response shape:
+// the response carries metadata scalars (region/charter/locale identifiers)
+// alongside the entity AND a sibling AuditTrail message field. Both message
+// fields are non-repeated, so uniqueNonRepeatedMessageField (Shape 2) returns
+// nil because there are multiple candidates. RequestEntity must use Shape 3
+// (request-side correlation) to pick the field whose type also appears as a
+// unique message-typed field on the request input.
+//
+// Domain: continent / country / city, matching the QA harness convention.
+
+service CountryService {
+  // Shape 3 fixture: response has 3 scalars + 2 message fields. Only
+  // `country`'s type appears in the request, so correlation picks `country`
+  // as both source and wrap.
+  rpc UpdateCountry  (UpdateCountryRequest)  returns (UpdateCountryResponse);
+
+  // Shape 3 ambiguity guard: response has 2 message fields whose types each
+  // also appear as a unique field on the request — auto-derive must bail
+  // out and signal ambiguity rather than guess.
+  rpc MergeCountries (MergeCountriesRequest) returns (UpdateCountryResponse);
+}
+
+message Country {
+  string code       = 1;
+  string name       = 2;
+  string continent  = 3;
+  int64  population = 4;
+}
+
+// Sibling metadata message — present in the response but NOT in the
+// UpdateCountryRequest input, so Shape 3 correlation must NOT pick it.
+message AuditTrail {
+  string actor = 1;
+  string note  = 2;
+}
+
+message UpdateCountryRequest {
+  string  region_id  = 1;
+  string  charter_id = 2;
+  string  locale     = 3;
+  string  id         = 4;
+  Country country    = 5;
+}
+
+message UpdateCountryResponse {
+  string     region_id  = 1;
+  string     charter_id = 2;
+  string     locale     = 3;
+  Country    country    = 4;
+  AuditTrail audit      = 5;
+}
+
+// Both message field types appear in the request input, so Shape 3 sees two
+// unambiguous correlations and must return ambiguous=true.
+message MergeCountriesRequest {
+  Country    primary = 1;
+  AuditTrail audit   = 2;
+}

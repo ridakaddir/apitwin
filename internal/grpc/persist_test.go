@@ -55,6 +55,22 @@ func loadGeoTestRegistry(t *testing.T) *Registry {
 	return reg
 }
 
+// loadLROTestRegistry parses the testdata lro.proto and returns a Registry.
+// Used by RequestEntity Shape 3 tests — multi-message responses where the
+// entity must be picked via request-side correlation (the user's
+// UpdateDatabaseInstance shape).
+func loadLROTestRegistry(t *testing.T) *Registry {
+	t.Helper()
+	reg, err := NewRegistry(
+		[]string{"lro.proto"},
+		[]string{"testdata"},
+	)
+	if err != nil {
+		t.Fatalf("NewRegistry: %v", err)
+	}
+	return reg
+}
+
 // -----------------------------------------------------------------------
 // EntityFieldNames
 // -----------------------------------------------------------------------
@@ -978,6 +994,277 @@ func TestApplyGRPCPersist_ExplicitSourceInfersWrapFromResponse(t *testing.T) {
 	}
 	if inner["population"] != float64(950000) {
 		t.Errorf("wrapped response population = %v, want 950000", inner["population"])
+	}
+}
+
+// -----------------------------------------------------------------------
+// Shape 3 — LRO multi-message responses
+// -----------------------------------------------------------------------
+
+// TestRequestEntity_LROResponseShapeCorrelatesViaRequest pins Shape 3: when
+// the response has multiple non-repeated message fields (so Shape 2 bails
+// out as "multi-candidate"), RequestEntity must correlate against the
+// request input and pick the field whose type also appears as a unique
+// request field.
+//
+// This is the user's reported bug shape: UpdateCountryResponse has
+// {region_id, charter_id, locale, country, audit}; only Country appears in
+// the request input as a message-typed field, so the auto-derive returns
+// ("country", "country", false).
+func TestRequestEntity_LROResponseShapeCorrelatesViaRequest(t *testing.T) {
+	reg := loadLROTestRegistry(t)
+	md, err := reg.FindMethod("/lro.v1.CountryService/UpdateCountry")
+	if err != nil || md == nil {
+		t.Fatalf("FindMethod UpdateCountry: md=%v err=%v", md, err)
+	}
+	src, wrap, amb := reg.RequestEntity(md)
+	if amb {
+		t.Error("expected ambiguous=false on LRO shape with one correlation")
+	}
+	if src != "country" {
+		t.Errorf("source = %q, want %q", src, "country")
+	}
+	if wrap != "country" {
+		t.Errorf("wrap = %q, want %q", wrap, "country")
+	}
+}
+
+// TestRequestEntity_LROResponseTwoCorrelatedFieldsAmbiguous covers the
+// Shape 3 ambiguity guard: when both response message fields have types
+// that each appear as a unique request field, auto-derive must bail out
+// rather than guess.
+func TestRequestEntity_LROResponseTwoCorrelatedFieldsAmbiguous(t *testing.T) {
+	reg := loadLROTestRegistry(t)
+	md, err := reg.FindMethod("/lro.v1.CountryService/MergeCountries")
+	if err != nil || md == nil {
+		t.Fatalf("FindMethod MergeCountries: md=%v err=%v", md, err)
+	}
+	src, wrap, amb := reg.RequestEntity(md)
+	if !amb {
+		t.Error("expected ambiguous=true when two response message fields each correlate")
+	}
+	if src != "" || wrap != "" {
+		t.Errorf("RequestEntity = (%q, %q), want (\"\", \"\")", src, wrap)
+	}
+}
+
+// TestUniqueNonRepeatedMessageField_SkipsScalars pins the relaxation: a
+// response message with a mix of scalars and a single message field must
+// resolve to that message field. Pre-fix this returned nil because the
+// first scalar caused an early bail-out.
+func TestUniqueNonRepeatedMessageField_SkipsScalars(t *testing.T) {
+	// UpdateCountryResponse has 3 scalars + 2 message fields. Multiple
+	// message fields means uniqueNonRepeatedMessageField still returns nil
+	// — but must not bail on the leading scalars; verified indirectly via
+	// candidateMessageFields below.
+	reg := loadLROTestRegistry(t)
+	md, _ := reg.FindMethod("/lro.v1.CountryService/UpdateCountry")
+	out := md.GetOutputType()
+	if got := uniqueNonRepeatedMessageField(out); got != nil {
+		t.Errorf("uniqueNonRepeatedMessageField(UpdateCountryResponse) = %v, want nil (multi-candidate)", got)
+	}
+	cands := candidateMessageFields(out)
+	if len(cands) != 2 {
+		t.Errorf("candidateMessageFields = %d, want 2", len(cands))
+	}
+}
+
+// TestResponseWrapForSource_PicksFieldMatchingSource pins the explicit-
+// source / implicit-wrap path on multi-message responses: when c.Source is
+// set but c.Wrap is empty, the wrap is computed from the response field
+// whose type matches the request field at sourcePath.
+func TestResponseWrapForSource_PicksFieldMatchingSource(t *testing.T) {
+	reg := loadLROTestRegistry(t)
+	md, _ := reg.FindMethod("/lro.v1.CountryService/UpdateCountry")
+
+	// sourcePath="country" → request field of type Country → response field
+	// of type Country is "country".
+	if got := reg.ResponseWrapForSource(md, "country"); got != "country" {
+		t.Errorf("ResponseWrapForSource(country) = %q, want %q", got, "country")
+	}
+
+	// Unknown source path returns "".
+	if got := reg.ResponseWrapForSource(md, "nonexistent"); got != "" {
+		t.Errorf("ResponseWrapForSource(nonexistent) = %q, want \"\"", got)
+	}
+
+	// Empty source path returns "".
+	if got := reg.ResponseWrapForSource(md, ""); got != "" {
+		t.Errorf("ResponseWrapForSource(\"\") = %q, want \"\"", got)
+	}
+
+	// Scalar source path (locale is a string) returns "".
+	if got := reg.ResponseWrapForSource(md, "locale"); got != "" {
+		t.Errorf("ResponseWrapForSource(locale) = %q, want \"\" (scalar)", got)
+	}
+
+	// nil safety.
+	if got := reg.ResponseWrapForSource(nil, "country"); got != "" {
+		t.Errorf("ResponseWrapForSource(nil, country) = %q, want \"\"", got)
+	}
+}
+
+// TestApplyGRPCPersist_AutoDerivesOnLROResponseShape is the end-to-end
+// regression test for the user's reported bug: a sparse case (no wrap, no
+// source) on a multi-message response must auto-derive both source and
+// wrap via Shape 3. Pre-fix the request envelope leaked into the stub and
+// EncodeResponse failed downstream.
+func TestApplyGRPCPersist_AutoDerivesOnLROResponseShape(t *testing.T) {
+	dir := t.TempDir()
+	stubFile := filepath.Join(dir, "stubs", "countries", "MA.json")
+	if err := os.MkdirAll(filepath.Dir(stubFile), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	initial, _ := json.Marshal(map[string]interface{}{
+		"code":       "MA",
+		"name":       "Morocco",
+		"continent":  "Africa",
+		"population": float64(37000000),
+	})
+	if err := os.WriteFile(stubFile, initial, 0644); err != nil {
+		t.Fatalf("write stub: %v", err)
+	}
+
+	reg := loadLROTestRegistry(t)
+	md, _ := reg.FindMethod("/lro.v1.CountryService/UpdateCountry")
+	if md == nil {
+		t.Fatal("UpdateCountry not found in LRO test registry")
+	}
+
+	h := &handler{
+		loader:      &stubLoader{cfg: &config.Config{}, configDir: dir},
+		transitions: newGRPCTransitionState(),
+		registry:    reg,
+	}
+
+	// Sparse case — mirrors the user's `ready` transition case: no wrap,
+	// no source. Must auto-derive both via Shape 3.
+	c := config.Case{
+		Status:  0,
+		File:    "stubs/countries/{body.id}.json",
+		Persist: true,
+		Merge:   "update",
+	}
+
+	reqMap := map[string]interface{}{
+		"regionId":  "EMEA",
+		"charterId": "charter-1",
+		"locale":    "fr-MA",
+		"id":        "MA",
+		"country": map[string]interface{}{
+			"population": float64(37500000),
+		},
+	}
+
+	code, handled, result, persistedPath := h.applyGRPCPersist(
+		c, reqMap, time.Now(),
+		"/lro.v1.CountryService/UpdateCountry", md,
+	)
+	if !handled {
+		t.Fatal("expected handled=true")
+	}
+	if code != codes.OK {
+		t.Fatalf("expected OK, got %v", code)
+	}
+	if persistedPath != stubFile {
+		t.Errorf("persistedPath=%q, want %q", persistedPath, stubFile)
+	}
+
+	// Response must be wrapped under the auto-derived "country" envelope.
+	inner, ok := result["country"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected result wrapped as {country: ...}, got %v", result)
+	}
+	if inner["population"] != float64(37500000) {
+		t.Errorf("population not updated in wrapped response: %v", inner["population"])
+	}
+
+	stub := readStub(t, stubFile)
+
+	// BUG REGRESSION: routing scalars and the nested wrapper key must NOT
+	// appear in the persisted file.
+	for _, key := range []string{"regionId", "charterId", "locale", "country"} {
+		if _, has := stub[key]; has {
+			t.Errorf("BUG REGRESSION: stub contains leaked key %q: %v", key, stub)
+		}
+	}
+	// Population updated, other fields preserved.
+	if stub["population"] != float64(37500000) {
+		t.Errorf("population not merged: got %v", stub["population"])
+	}
+	if stub["name"] != "Morocco" || stub["continent"] != "Africa" {
+		t.Errorf("seed fields lost: %v", stub)
+	}
+}
+
+// TestApplyGRPCPersist_RefusesPayloadWithExtraEntityFields pins the
+// runtime safeguard: when the persist payload (after source extraction
+// and wrap filtering) still contains keys that aren't valid for the
+// entity schema, the persist must be refused with codes.Internal and the
+// stub file on disk must not be touched. This is the last-mile defence
+// against config that slips past inheritance + auto-derive + the startup
+// validator.
+func TestApplyGRPCPersist_RefusesPayloadWithExtraEntityFields(t *testing.T) {
+	dir := t.TempDir()
+	stubFile := filepath.Join(dir, "stubs", "instances", "db-1.json")
+	if err := os.MkdirAll(filepath.Dir(stubFile), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	initial, _ := json.Marshal(map[string]interface{}{
+		"id":   "db-1",
+		"tier": "standard",
+	})
+	if err := os.WriteFile(stubFile, initial, 0644); err != nil {
+		t.Fatalf("write stub: %v", err)
+	}
+	preCorrupt, _ := os.ReadFile(stubFile)
+
+	reg := loadDatabaseTestRegistry(t)
+	md, _ := reg.FindMethod("/database.v1.DatabaseService/UpdateDatabaseInstance")
+
+	h := &handler{
+		loader:      &stubLoader{cfg: &config.Config{}, configDir: dir},
+		transitions: newGRPCTransitionState(),
+		registry:    reg,
+	}
+
+	// Use an explicit source pointing at a request field WITH a non-
+	// DatabaseInstance shape — this lets us inject a payload whose keys
+	// don't match the entity schema, simulating a misconfigured route
+	// that bypassed the validator. We point source at "name" (a string) —
+	// ExtractSourceField will return nil → srcMap stays as reqMap (full
+	// envelope), and with no wrap, the filter step is skipped. The
+	// safeguard must catch the schema mismatch before persist.Update.
+	c := config.Case{
+		File:    "stubs/instances/{body.databaseInstance.id}.json",
+		Persist: true,
+		Merge:   "update",
+		// No Source, no Wrap — sparse case. Auto-derive on
+		// UpdateDatabaseInstance returns "databaseInstance" + "" (Shape 1
+		// direct-entity), so wrap stays empty. We then send a payload
+		// whose extracted DatabaseInstance has a key that's NOT a field
+		// of DatabaseInstance — `bogusKey`.
+	}
+	reqMap := map[string]interface{}{
+		"name": "db-1",
+		"databaseInstance": map[string]interface{}{
+			"id":       "db-1",
+			"bogusKey": "would corrupt the file",
+		},
+	}
+
+	code, handled, _, _ := h.applyGRPCPersist(c, reqMap, time.Now(),
+		"/database.v1.DatabaseService/UpdateDatabaseInstance", md)
+	if !handled {
+		t.Fatal("expected handled=true on safeguard rejection")
+	}
+	if code != codes.Internal {
+		t.Errorf("expected codes.Internal, got %v", code)
+	}
+	postCorrupt, _ := os.ReadFile(stubFile)
+	if string(preCorrupt) != string(postCorrupt) {
+		t.Errorf("stub file modified despite safeguard rejection:\n  pre:  %s\n  post: %s",
+			preCorrupt, postCorrupt)
 	}
 }
 

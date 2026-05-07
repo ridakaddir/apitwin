@@ -71,6 +71,16 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		return nil, fmt.Errorf("building proto registry: %w", err)
 	}
 
+	// Fail-fast config validation: refuse to start with a config that would
+	// allow a route to corrupt its persisted stub. Catches transition cases
+	// that omit wrap/source on multi-message response shapes where neither
+	// inheritance nor auto-derive can recover.
+	if cfg := opts.Loader.Get(); cfg != nil {
+		if errs := config.ValidateGRPCRoutes(cfg.GRPCRoutes, NewSchema(registry)); len(errs) > 0 {
+			return nil, fmt.Errorf("%s", config.FormatValidationErrors(errs))
+		}
+	}
+
 	h := newHandler(opts.Loader, registry, opts.Target)
 
 	// Wire persistence if a metadata directory is configured. Both the
