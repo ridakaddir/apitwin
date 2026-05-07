@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/ridakaddir/apitwin/internal/config"
@@ -69,6 +70,40 @@ func NewServer(opts ServerOptions) (*Server, error) {
 	registry, err := NewRegistry(opts.ProtoFiles, opts.ImportPaths)
 	if err != nil {
 		return nil, fmt.Errorf("building proto registry: %w", err)
+	}
+
+	// Fail-fast config validation: refuse to start with a config that would
+	// allow a route to corrupt its persisted stub. Catches transition cases
+	// that omit wrap/source on multi-message response shapes where neither
+	// inheritance nor auto-derive can recover. Wildcard / regex match
+	// patterns (e.g. "~^/foo/.*") get a structural-only check — schema
+	// lookup needs an exact method path — and a heads-up log so users know.
+	if cfg := opts.Loader.Get(); cfg != nil {
+		var skipped int
+		for _, r := range cfg.GRPCRoutes {
+			if !r.IsEnabled() {
+				continue
+			}
+			if !strings.Contains(r.Match, "*") && !strings.HasPrefix(r.Match, "~") {
+				continue
+			}
+			// Only count the route if it has at least one persist+update
+			// case — otherwise skipping its schema check is a no-op and
+			// surfacing it in the log is noise.
+			for _, c := range r.Cases {
+				if c.Persist && strings.EqualFold(c.Merge, "update") {
+					skipped++
+					break
+				}
+			}
+		}
+		if skipped > 0 {
+			logger.Info("grpc validate: schema-driven checks skipped for wildcard / regex routes with persist+update cases",
+				"count", skipped)
+		}
+		if err := config.AsError(config.ValidateGRPCRoutes(cfg.GRPCRoutes, NewSchema(registry))); err != nil {
+			return nil, err
+		}
 	}
 
 	h := newHandler(opts.Loader, registry, opts.Target)

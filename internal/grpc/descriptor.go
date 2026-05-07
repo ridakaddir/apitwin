@@ -179,11 +179,26 @@ func (r *Registry) FindRepeatedField(md *desc.MethodDescriptor) string {
 //	     UpdateGatewayRequest  { GatewayParent parent = 1; string gateway_name = 2; Gateway gateway = 3; }
 //	     → ("gateway", "gateway", false)
 //
-// Shape 1 is tried first. Shape 2 is the fallback: it applies only when the
-// response type has exactly one non-repeated, non-map message field — that
-// field's type is then treated as the entity type. Scalars, repeated, and
-// map fields in the request are ignored by both shapes, so a prefix-
-// colliding scalar like `string gateway_name = 2;` cannot trip the match.
+//  3. LRO/multi-message wrapper — the response carries metadata scalars and
+//     several message fields, and the entity must be picked by correlating
+//     against the request input. Returns (source, wrap, false) when exactly
+//     one response message field has a type that also appears as a unique
+//     request field:
+//
+//	     rpc UpdateDatabaseInstance(UpdateDatabaseInstanceRequest)
+//	         returns (UpdateDatabaseInstanceResponse)
+//	     UpdateDatabaseInstanceResponse {
+//	         string org_id = 1; string provider_id = 2; string environment = 3;
+//	         DatabaseInstance database_instance = 4; Resource resource = 5;
+//	     }
+//	     UpdateDatabaseInstanceRequest {
+//	         string org_id = 1; ...; DatabaseInstance database_instance = 5;
+//	     }
+//	     → ("databaseInstance", "databaseInstance", false)
+//
+// Shape 1 is tried first, then Shape 2, then Shape 3. Scalars, repeated, and
+// map fields in the request are ignored by all shapes, so a prefix-colliding
+// scalar like `string gateway_name = 2;` cannot trip the match.
 //
 // Returns ("", "", false) when no shape matches or md is nil (silent skip:
 // the caller should leave source/wrap at the explicit config value, which
@@ -214,18 +229,50 @@ func (r *Registry) RequestEntity(md *desc.MethodDescriptor) (source, wrap string
 
 	// Shape 2: response WRAPS a single entity field.
 	wrapField := uniqueNonRepeatedMessageField(outType)
-	if wrapField == nil {
-		return "", "", false
+	if wrapField != nil {
+		entityFQN := wrapField.GetMessageType().GetFullyQualifiedName()
+		src, amb := uniqueRequestFieldOfType(inType, entityFQN)
+		if amb {
+			return "", "", true
+		}
+		if src != "" {
+			return src, wrapField.GetJSONName(), false
+		}
+		// Wrapper exists but no matching request field — fall through.
 	}
-	entityFQN := wrapField.GetMessageType().GetFullyQualifiedName()
-	src, amb := uniqueRequestFieldOfType(inType, entityFQN)
-	if amb {
-		return "", "", true
+
+	// Shape 3: response has multiple non-repeated message fields. Correlate
+	// each candidate's type against the request input; if exactly one
+	// candidate has a unique request field of that type, treat it as the
+	// entity. This handles Google-LRO-flavoured responses where metadata
+	// scalars and a status / audit / resource sibling message accompany the
+	// entity (e.g. UpdateDatabaseInstanceResponse with database_instance +
+	// resource).
+	candidates := candidateMessageFields(outType)
+	if len(candidates) >= 2 {
+		var matched *desc.FieldDescriptor
+		for _, f := range candidates {
+			entityFQN := f.GetMessageType().GetFullyQualifiedName()
+			src, amb := uniqueRequestFieldOfType(inType, entityFQN)
+			if amb || src == "" {
+				continue
+			}
+			if matched != nil {
+				// Two response fields each correlate to a unique
+				// request field — caller must disambiguate via explicit
+				// `source`.
+				return "", "", true
+			}
+			matched = f
+		}
+		if matched != nil {
+			entityFQN := matched.GetMessageType().GetFullyQualifiedName()
+			src, _ := uniqueRequestFieldOfType(inType, entityFQN)
+			return src, matched.GetJSONName(), false
+		}
 	}
-	if src == "" {
-		return "", "", false
-	}
-	return src, wrapField.GetJSONName(), false
+
+	return "", "", false
 }
 
 // RequestEntityField is a backwards-compatible shim around RequestEntity
@@ -238,14 +285,16 @@ func (r *Registry) RequestEntityField(md *desc.MethodDescriptor) (name string, a
 
 // ResponseWrap returns the JSON name of the response type's unique wrapper
 // field — the single non-repeated, non-map message field on the output type.
-// Returns "" when the response has zero, two, or more such fields, or when
-// the lone field is a scalar (shape 1 direct-entity response: the response
-// IS the entity, no wrap needed).
+// Returns "" when the response has zero, two, or more such fields.
 //
 // Used by applyGRPCPersist when the user has explicitly set c.Source but left
 // c.Wrap empty: the source-driven extraction plus the response wrapper
 // inference are independent concerns, so having an explicit source should
 // not disable wrap inference from the response type.
+//
+// For multi-message responses where this returns "", callers should fall
+// back to ResponseWrapForSource(md, c.Source) — the explicit source field
+// can disambiguate which response wrapper to pick.
 func (r *Registry) ResponseWrap(md *desc.MethodDescriptor) string {
 	if md == nil {
 		return ""
@@ -259,6 +308,70 @@ func (r *Registry) ResponseWrap(md *desc.MethodDescriptor) string {
 		return ""
 	}
 	return wrapField.GetJSONName()
+}
+
+// ResponseWrapForSource returns the JSON name of the response wrapper field
+// whose entity type matches the request field at sourcePath. Used when the
+// user has set source explicitly but left wrap empty on a multi-message
+// response shape (where ResponseWrap returns "" because there is no unique
+// wrapper).
+//
+// Algorithm: locate the request field at sourcePath, take its message type,
+// then return the JSON name of the unique response field with the same type.
+// Returns "" when sourcePath is empty, when md is nil, when sourcePath does
+// not resolve to a message-typed field on the request, or when no/multiple
+// response fields share that type.
+//
+// Only the first segment of sourcePath is used (deep paths like
+// "terrain.summit" extract beyond the message-typed root, but the wrap is
+// always the response wrapper around the root entity type).
+func (r *Registry) ResponseWrapForSource(md *desc.MethodDescriptor, sourcePath string) string {
+	if md == nil || sourcePath == "" {
+		return ""
+	}
+	inType := md.GetInputType()
+	outType := md.GetOutputType()
+	if inType == nil || outType == nil {
+		return ""
+	}
+	// Walk to the first segment only — wrap is on the entity root.
+	root := sourcePath
+	for i := 0; i < len(sourcePath); i++ {
+		if sourcePath[i] == '.' {
+			root = sourcePath[:i]
+			break
+		}
+	}
+	var entityFQN string
+	for _, f := range inType.GetFields() {
+		if f.GetJSONName() != root && f.GetName() != root {
+			continue
+		}
+		mt := f.GetMessageType()
+		if mt == nil {
+			return ""
+		}
+		entityFQN = mt.GetFullyQualifiedName()
+		break
+	}
+	if entityFQN == "" {
+		return ""
+	}
+	var match string
+	for _, f := range outType.GetFields() {
+		if f.IsRepeated() || f.IsMap() {
+			continue
+		}
+		mt := f.GetMessageType()
+		if mt == nil || mt.GetFullyQualifiedName() != entityFQN {
+			continue
+		}
+		if match != "" {
+			return "" // ambiguous — two response fields of the entity type
+		}
+		match = f.GetJSONName()
+	}
+	return match
 }
 
 // uniqueRequestFieldOfType returns the JSON name of the single non-repeated,
@@ -288,11 +401,17 @@ func uniqueRequestFieldOfType(inType *desc.MessageDescriptor, fqn string) (name 
 }
 
 // uniqueNonRepeatedMessageField returns the lone non-repeated, non-map
-// message-typed field of outType, or nil when outType has zero, two, or
-// more such fields. Used to detect "response wrapper" message shapes like
-// UpdateGatewayResponse { Gateway gateway = 1; } — messages with additional
-// scalar or repeated fields are deliberately not unwrapped because there is
-// no safe way to pick one.
+// message-typed field of outType, or nil when outType has zero or two-or-more
+// such fields. Scalars are skipped (not bailed on) so Google-style LRO
+// responses like
+//
+//	{ string org_id = 1; ...; Entity entity = 4; }
+//
+// still resolve to the entity. Repeated and map fields still bail out — they
+// are response-shape choices that don't fit a "unwrap to a single entity"
+// model. Callers that hit nil with multiple message candidates can use
+// candidateMessageFields + request-side correlation (Shape 3 in
+// RequestEntity) to disambiguate.
 func uniqueNonRepeatedMessageField(outType *desc.MessageDescriptor) *desc.FieldDescriptor {
 	var candidate *desc.FieldDescriptor
 	for _, f := range outType.GetFields() {
@@ -300,7 +419,7 @@ func uniqueNonRepeatedMessageField(outType *desc.MessageDescriptor) *desc.FieldD
 			return nil
 		}
 		if f.GetMessageType() == nil {
-			return nil
+			continue
 		}
 		if candidate != nil {
 			return nil
@@ -308,6 +427,39 @@ func uniqueNonRepeatedMessageField(outType *desc.MessageDescriptor) *desc.FieldD
 		candidate = f
 	}
 	return candidate
+}
+
+// candidateMessageFields returns every non-repeated, non-map message-typed
+// field on outType. Used by RequestEntity Shape 3 when
+// uniqueNonRepeatedMessageField returns nil because there are multiple
+// candidates: enumerating them lets the caller correlate against the
+// request input type to pick the "real" entity.
+//
+// Repeated and map fields are SKIPPED (not bailed on). A response with a
+// sibling `repeated Operation operations` alongside two non-repeated
+// message fields still surfaces both candidates so Shape 3 + the startup
+// validator can correlate.
+//
+// Known asymmetry with uniqueNonRepeatedMessageField (Shape 2): Shape 2
+// still bails on any repeated/map sibling. Combined with Shape 3's
+// `len(candidates) >= 2` guard, the shape `{repeated Foo; Bar bar}` (one
+// non-repeated message + one repeated sibling) is auto-derived as blind
+// — Shape 2 bails, Shape 3 has only 1 candidate. Such a route would need
+// explicit `wrap`/`source` to persist correctly. Acceptable: response
+// envelope clobbering needs at least two non-repeated fields to produce
+// the bug shape.
+func candidateMessageFields(outType *desc.MessageDescriptor) []*desc.FieldDescriptor {
+	var out []*desc.FieldDescriptor
+	for _, f := range outType.GetFields() {
+		if f.IsRepeated() || f.IsMap() {
+			continue
+		}
+		if f.GetMessageType() == nil {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
 }
 
 // EntityFieldNames returns the set of JSON and proto field names defined on the

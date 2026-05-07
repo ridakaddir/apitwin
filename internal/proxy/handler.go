@@ -160,7 +160,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		c, ok := route.Cases[caseName]
+		c, ok := config.ResolveCase(route.Cases, caseName, route.Fallback)
 		if !ok {
 			logger.Warn("case not found in route", "case", caseName, "route", route.Match)
 			break
@@ -203,7 +203,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				// (shared across all resource IDs) and resolves to a terminal
 				// "update" case for a resource whose file doesn't exist yet.
 				if buf != nil && buf.status == http.StatusNotFound {
-					fallbackCase, ok := route.Cases[route.Fallback]
+					fallbackCase, ok := config.ResolveCase(route.Cases, route.Fallback, route.Fallback)
 					if ok && fallbackCase.Persist {
 						handled2, persistedPath2 := applyPersist(w, requestForExtraction, fallbackCase, bodyBytes, route.Match, h.loader.StubRoot(), pathParams)
 						if handled2 {

@@ -365,3 +365,43 @@ func TestAppendResponseResolvesDirectoryRefs(t *testing.T) {
 	assert.Equal(t, "ep-1", resp["endpointId"])
 	assert.Equal(t, "us-east-1", resp["region"])
 }
+
+
+// TestApplyPersist_RefusesPayloadContainingWrapKey pins the REST equivalent
+// of the gRPC runtime safeguard: when a "update" merge case has wrap set
+// AND the incoming body contains the wrap key as a top-level field, the
+// persist must be refused with a 500 and the stub file must not be touched.
+//
+// This is the REST analogue of the gRPC bug report shape: writing
+// {"country": {nested entity}} into a flat country stub via shallow merge
+// produces a file with both flat fields and a duplicated wrapper, which
+// the next GET would mis-render. Catching it before the write keeps the
+// stub recoverable.
+func TestApplyPersist_RefusesPayloadContainingWrapKey(t *testing.T) {
+	dir := t.TempDir()
+	stubFile := filepath.Join(dir, "country.json")
+	initial := `{"code":"MA","name":"Morocco","continent":"Africa"}`
+	require.NoError(t, os.WriteFile(stubFile, []byte(initial), 0644))
+	preCorrupt, _ := os.ReadFile(stubFile)
+
+	c := config.Case{
+		Status:  200,
+		File:    stubFile,
+		Persist: true,
+		Merge:   "update",
+		Wrap:    "country", // sets the wrap key
+		// no Source — would let the wrapped body leak through
+	}
+	body := []byte(`{"country":{"population":37500000}}`)
+
+	req := httptest.NewRequest(http.MethodPatch, "/countries/MA", nil)
+	w := httptest.NewRecorder()
+
+	handled, _ := applyPersist(w, req, c, body, "/countries/{code}", dir, nil)
+	require.True(t, handled, "applyPersist should handle the request")
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	postCorrupt, _ := os.ReadFile(stubFile)
+	assert.Equal(t, string(preCorrupt), string(postCorrupt),
+		"stub file must NOT be modified when safeguard refuses the write")
+}

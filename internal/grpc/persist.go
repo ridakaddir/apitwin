@@ -73,6 +73,12 @@ func (h *handler) applyGRPCPersist(
 		// entity directly into the outer response message and fails proto
 		// round-trip on encode ("no known field named <entity-field>").
 		wrapField = h.registry.ResponseWrap(md)
+		if wrapField == "" {
+			// ResponseWrap returns "" for multi-message responses (e.g.
+			// LRO shapes with sibling status/audit/resource fields). Use
+			// the explicit source to pick the right wrapper.
+			wrapField = h.registry.ResponseWrapForSource(md, sourceField)
+		}
 	}
 	srcMap := reqMap
 	if sourceField != "" {
@@ -97,10 +103,13 @@ func (h *handler) applyGRPCPersist(
 	// to only fields valid in the entity message. This prevents routing
 	// fields from the request (e.g. orgId, providerId) from leaking into
 	// the persisted stub and causing proto encoding failures on the
-	// response.
+	// response. Pre-allocated here so the merge=update safeguard below
+	// can reuse the result without rebuilding the map.
+	var allowedEntityFields map[string]bool
 	if wrapField != "" && md != nil {
-		if allowed := h.registry.EntityFieldNames(md, wrapField); allowed != nil {
-			persistData = filterToEntityFields(persistData, allowed)
+		allowedEntityFields = h.registry.EntityFieldNames(md, wrapField)
+		if allowedEntityFields != nil {
+			persistData = filterToEntityFields(persistData, allowedEntityFields)
 		}
 	}
 
@@ -109,6 +118,34 @@ func (h *handler) applyGRPCPersist(
 	case "update":
 		// Apply defaults if specified (enrich incoming data before persisting).
 		persistData = loadGRPCDefaults(c.Defaults, persistData, reqMap, configDir)
+
+		// Defense-in-depth: refuse to write a payload whose top-level keys
+		// are not valid for the response entity schema. This runs AFTER
+		// loadGRPCDefaults so a defaults file with stray non-entity keys
+		// cannot slip past. Scoped to merge=update because that is the
+		// shape from the bug report; merge=append already round-trips its
+		// payload through filterToEntityFields above and tightening it
+		// would break existing append users with metadata sidecars.
+		//
+		// When wrap is set: reuse the entity-field set from above. When
+		// wrap is empty (Shape 1 direct-entity or auto-derive blind):
+		// fall back to the response output type's own field set.
+		if md != nil {
+			allowed := allowedEntityFields
+			if allowed == nil && wrapField == "" {
+				allowed = entityFieldsFromType(md.GetOutputType())
+			}
+			if allowed != nil {
+				if extras := keysNotIn(persistData, allowed); len(extras) > 0 {
+					logger.Error("grpc persist refused: payload has fields not present in entity schema",
+						"method", fullMethod, "file", filePath, "extras", extras,
+						"wrap", wrapField, "source", sourceField)
+					logger.LogGRPC(fullMethod, codes.Internal, time.Since(start), logger.SourceStub)
+					return codes.Internal, true, nil, ""
+				}
+			}
+		}
+
 		updated, err := persist.Update(filePath, persistData)
 		if err != nil {
 			if persist.IsNotFound(err) {
@@ -169,6 +206,39 @@ func (h *handler) applyGRPCPersist(
 		logger.LogGRPC(fullMethod, codes.Internal, time.Since(start), logger.SourceStub)
 		return codes.Internal, true, nil, ""
 	}
+}
+
+// entityFieldsFromType returns the JSON+proto field-name set of mt, used by
+// the persist runtime safeguard when no `wrap` is in play (Shape 1
+// direct-entity responses, or auto-derive blind). Returns nil when mt is nil
+// or has zero fields.
+func entityFieldsFromType(mt *desc.MessageDescriptor) map[string]bool {
+	if mt == nil {
+		return nil
+	}
+	fields := mt.GetFields()
+	if len(fields) == 0 {
+		return nil
+	}
+	allowed := make(map[string]bool, len(fields)*2)
+	for _, f := range fields {
+		allowed[f.GetJSONName()] = true
+		allowed[f.GetName()] = true
+	}
+	return allowed
+}
+
+// keysNotIn returns the keys of data that are NOT in allowed. Used by the
+// persist runtime safeguard to identify entity-schema violations before the
+// file is written. Returns nil when no extras exist.
+func keysNotIn(data map[string]interface{}, allowed map[string]bool) []string {
+	var extras []string
+	for k := range data {
+		if !allowed[k] {
+			extras = append(extras, k)
+		}
+	}
+	return extras
 }
 
 // filterToEntityFields returns a shallow copy of data containing only keys

@@ -110,6 +110,19 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		return nil, fmt.Errorf("loading config: %w", err)
 	}
 
+	// Fail-fast structural validation of REST routes. Catches config
+	// errors that would otherwise silently corrupt persisted stubs at
+	// runtime (e.g. a transition case with persist+merge=update but no
+	// file). Wrap/source enforcement on REST is handled by the runtime
+	// safeguard in applyPersist — there's no schema here to know what
+	// "valid wrap" means.
+	if cfg := loader.Get(); cfg != nil {
+		if err := config.AsError(config.ValidateRESTRoutes(cfg.Routes)); err != nil {
+			loader.Close()
+			return nil, err
+		}
+	}
+
 	// Runtime state directory bootstrap.
 	//
 	// Unless --no-runtime-dir is passed, mirror the seed tree into either
