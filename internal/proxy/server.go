@@ -19,6 +19,7 @@ import (
 	apitwinruntime "github.com/ridakaddir/apitwin/internal/runtime"
 	runtimepersist "github.com/ridakaddir/apitwin/internal/runtime/persist"
 	"github.com/ridakaddir/apitwin/internal/transitions"
+	"github.com/ridakaddir/apitwin/internal/validation"
 	uifs "github.com/ridakaddir/apitwin/ui"
 )
 
@@ -120,6 +121,10 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		if err := config.AsError(config.ValidateRESTRoutes(cfg.Routes)); err != nil {
 			loader.Close()
 			return nil, err
+		}
+		if err := validation.ValidateConfig(cfg); err != nil {
+			loader.Close()
+			return nil, fmt.Errorf("validation rules: %w", err)
 		}
 	}
 

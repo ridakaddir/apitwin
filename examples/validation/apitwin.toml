@@ -1,0 +1,52 @@
+# Payload validation — declarative rules on a REST and a gRPC route.
+#
+# Each rule is `{field, op, value, message?}`. The op vocabulary matches
+# buf.validate.field (gRPC standard) and OpenAPI 3 schema constraints
+# (REST standard). See docs/validation.md for the full operator table.
+#
+# Run:
+#   apitwin --config examples/validation
+#
+# Try the REST side:
+#   # All required fields missing → HTTP 400 with violations
+#   http POST :4000/cities
+#
+#   # Bad country code + out-of-range population → multiple violations
+#   http POST :4000/cities name=Lima country_code=fra population:=-1 continent=atlantis
+#
+#   # Valid payload → 201 Created
+#   http POST :4000/cities name=Lima country_code=PE population:=9700000 continent=americas
+
+[[routes]]
+method   = "POST"
+match    = "/cities"
+fallback = "created"
+
+  [[routes.validation]]
+  field = "name"
+  op    = "required"
+
+  [[routes.validation]]
+  field = "name"
+  op    = "min_len"
+  value = "1"
+
+  [[routes.validation]]
+  field = "country_code"
+  op    = "pattern"
+  value = "^[A-Z]{2}$"
+  message = "country_code must be an ISO 3166-1 alpha-2 code (e.g. FR, PE)"
+
+  [[routes.validation]]
+  field = "population"
+  op    = "gte"
+  value = "0"
+
+  [[routes.validation]]
+  field = "continent"
+  op    = "in"
+  value = "africa,europe,asia,americas,oceania,antarctica"
+
+  [routes.cases.created]
+  status = 201
+  file   = "stubs/city-created.json"

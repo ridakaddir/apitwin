@@ -34,3 +34,4 @@ apitwin supports gRPC mock and proxy alongside the HTTP server — both run in t
 | [Stubs & Conditions](stubs.md) | Stub format, conditions, proxy fallthrough |
 | [Persistence](persistence.md) | Directory-based CRUD for gRPC |
 | [Generation](generation.md) | `apitwin generate --proto` workflow |
+| [Payload validation](../validation.md) | Reject malformed requests with `INVALID_ARGUMENT` before they hit your stubs |

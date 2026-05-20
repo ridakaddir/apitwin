@@ -16,6 +16,7 @@ import (
 	"github.com/ridakaddir/apitwin/internal/config"
 	"github.com/ridakaddir/apitwin/internal/logger"
 	"github.com/ridakaddir/apitwin/internal/persist"
+	"github.com/ridakaddir/apitwin/internal/validation"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -136,6 +137,16 @@ func (h *handler) serve(srv interface{}, stream grpc.ServerStream) error {
 			return status.Errorf(codes.Unimplemented,
 				"method %s matched a [[grpc_routes]] entry but is not present in any loaded --grpc-proto file",
 				fullMethod)
+		}
+
+		// Payload validation runs before case resolution so an invalid
+		// request gets INVALID_ARGUMENT with per-field details instead of
+		// silently flowing into a stub response.
+		if len(route.Validation) > 0 {
+			if res := validation.Validate(reqMap, route.Validation); !res.OK {
+				logger.LogGRPC(fullMethod, codes.InvalidArgument, time.Since(start), logger.SourceStub)
+				return grpcInvalidArgument(res.Violations)
+			}
 		}
 
 		caseName := h.resolveCase(route, reqMap)

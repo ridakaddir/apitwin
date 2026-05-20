@@ -85,3 +85,4 @@ Both arrays use the same case/condition/transition structure. They can coexist i
 - [Routes](routes.md) — route fields, path matching patterns
 - [Cases](cases.md) — case fields, response definitions, persistence
 - [Config Formats](formats.md) — TOML, YAML, and JSON side-by-side
+- [Payload validation](../validation.md) — declarative request validation for REST and gRPC

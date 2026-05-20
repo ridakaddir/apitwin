@@ -7,6 +7,7 @@ import (
 
 	"github.com/ridakaddir/apitwin/internal/config"
 	"github.com/ridakaddir/apitwin/internal/logger"
+	"github.com/ridakaddir/apitwin/internal/validation"
 )
 
 // Handler holds runtime state for the request dispatcher.
@@ -151,6 +152,19 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		matched, pathParams := matchWithNamedParams(route.Match, matchPath_)
 		if !matched {
 			continue
+		}
+
+		// Payload validation runs before case resolution so an invalid
+		// request gets a real 400 instead of falling through to a stub
+		// response. Rules are best-effort against the parsed JSON body;
+		// non-JSON bodies validate against an empty map (so `required`
+		// rules will fire as expected).
+		if len(route.Validation) > 0 {
+			payload := parseJSONBody(bodyBytes)
+			if res := validation.Validate(payload, route.Validation); !res.OK {
+				writeValidationError(w, res.Violations)
+				return
+			}
 		}
 
 		// Route matched — resolve case.

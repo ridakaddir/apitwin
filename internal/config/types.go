@@ -15,12 +15,13 @@ type Config struct {
 //
 // Case.File and Case.JSON hold protojson-compatible JSON (field names match the proto field names).
 type GRPCRoute struct {
-	Match       string          `json:"match"       yaml:"match"       toml:"match"`
-	Enabled     *bool           `json:"enabled"     yaml:"enabled"     toml:"enabled"`
-	Fallback    string          `json:"fallback"    yaml:"fallback"    toml:"fallback"`
-	Conditions  []Condition     `json:"conditions"  yaml:"conditions"  toml:"conditions"`
-	Cases       map[string]Case `json:"cases"       yaml:"cases"       toml:"cases"`
-	Transitions []Transition    `json:"transitions" yaml:"transitions" toml:"transitions"`
+	Match       string           `json:"match"       yaml:"match"       toml:"match"`
+	Enabled     *bool            `json:"enabled"     yaml:"enabled"     toml:"enabled"`
+	Fallback    string           `json:"fallback"    yaml:"fallback"    toml:"fallback"`
+	Conditions  []Condition      `json:"conditions"  yaml:"conditions"  toml:"conditions"`
+	Validation  []ValidationRule `json:"validation"  yaml:"validation"  toml:"validation"`
+	Cases       map[string]Case  `json:"cases"       yaml:"cases"       toml:"cases"`
+	Transitions []Transition     `json:"transitions" yaml:"transitions" toml:"transitions"`
 }
 
 // IsEnabled returns true if the gRPC route is enabled (defaults to true if not set).
@@ -40,13 +41,29 @@ func (r *GRPCRoute) GetTransitions() []Transition {
 
 // Route defines a single interceptable HTTP endpoint.
 type Route struct {
-	Method      string          `json:"method"      yaml:"method"      toml:"method"`
-	Match       string          `json:"match"       yaml:"match"       toml:"match"`
-	Enabled     *bool           `json:"enabled"     yaml:"enabled"     toml:"enabled"`
-	Fallback    string          `json:"fallback"    yaml:"fallback"    toml:"fallback"`
-	Conditions  []Condition     `json:"conditions"  yaml:"conditions"  toml:"conditions"`
-	Cases       map[string]Case `json:"cases"       yaml:"cases"       toml:"cases"`
-	Transitions []Transition    `json:"transitions" yaml:"transitions" toml:"transitions"`
+	Method      string           `json:"method"      yaml:"method"      toml:"method"`
+	Match       string           `json:"match"       yaml:"match"       toml:"match"`
+	Enabled     *bool            `json:"enabled"     yaml:"enabled"     toml:"enabled"`
+	Fallback    string           `json:"fallback"    yaml:"fallback"    toml:"fallback"`
+	Conditions  []Condition      `json:"conditions"  yaml:"conditions"  toml:"conditions"`
+	Validation  []ValidationRule `json:"validation"  yaml:"validation"  toml:"validation"`
+	Cases       map[string]Case  `json:"cases"       yaml:"cases"       toml:"cases"`
+	Transitions []Transition     `json:"transitions" yaml:"transitions" toml:"transitions"`
+}
+
+// ValidationRule declares a single payload-validation check applied to
+// incoming requests on a route. Field is a dot-notation path into the
+// decoded JSON / proto body. Op names match the registry in
+// internal/validation/ops.go (required, forbidden, type, const, in,
+// not_in, gt, gte, lt, lte, min_len, max_len, pattern, prefix, suffix,
+// contains, email, uri, uuid, ipv4, ipv6, hostname, min_items, max_items,
+// unique). Value is the comparand (parsed per-op). Message optionally
+// overrides the generated failure text.
+type ValidationRule struct {
+	Field   string `json:"field"             yaml:"field"             toml:"field"`
+	Op      string `json:"op"                yaml:"op"                toml:"op"`
+	Value   string `json:"value,omitempty"   yaml:"value,omitempty"   toml:"value,omitempty"`
+	Message string `json:"message,omitempty" yaml:"message,omitempty" toml:"message,omitempty"`
 }
 
 // Transition defines one step in a time-based response sequence.

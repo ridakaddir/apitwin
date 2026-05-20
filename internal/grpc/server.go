@@ -12,6 +12,7 @@ import (
 	"github.com/ridakaddir/apitwin/internal/config"
 	"github.com/ridakaddir/apitwin/internal/logger"
 	runtimepersist "github.com/ridakaddir/apitwin/internal/runtime/persist"
+	"github.com/ridakaddir/apitwin/internal/validation"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	v1reflectiongrpc "google.golang.org/grpc/reflection/grpc_reflection_v1"
@@ -103,6 +104,9 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		}
 		if err := config.AsError(config.ValidateGRPCRoutes(cfg.GRPCRoutes, NewSchema(registry))); err != nil {
 			return nil, err
+		}
+		if err := validation.ValidateConfig(cfg); err != nil {
+			return nil, fmt.Errorf("validation rules: %w", err)
 		}
 	}
 
