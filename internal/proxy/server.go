@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -89,6 +90,11 @@ type Server struct {
 	// HTTP handlers read this from request goroutines while cmd/root.go
 	// writes it from the startup goroutine.
 	grpcInvoker atomic.Pointer[GRPCInvoker]
+
+	// configWriteMu serialises dev-tool config writes so two concurrent
+	// /__api/config/routes saves don't race. The fsnotify reloader picks
+	// up each completed write independently.
+	configWriteMu sync.Mutex
 }
 
 // NewServer initialises the proxy server.
@@ -265,6 +271,10 @@ func NewServer(opts ServerOptions) (*Server, error) {
 	mux.HandleFunc("/__api/routes", apiRoutesHandler(loader))
 	mux.HandleFunc("/__api/grpc/methods", s.apiGRPCMethodsHandler)
 	mux.HandleFunc("/__api/grpc/invoke", s.apiGRPCInvokeHandler)
+	mux.HandleFunc("/__api/config/files", s.apiConfigFilesHandler)
+	mux.HandleFunc("/__api/config/preview", s.apiConfigPreviewHandler)
+	mux.HandleFunc("/__api/config/validate", s.apiConfigValidateHandler)
+	mux.HandleFunc("/__api/config/routes", s.apiConfigRoutesHandler)
 	mux.Handle("/__ui/", uiHandler())
 	mux.Handle("/", handler)
 

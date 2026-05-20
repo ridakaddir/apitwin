@@ -90,6 +90,18 @@ func (l *Loader) AddOnChange(fn func(*Config)) {
 	l.onChangeFns = append(l.onChangeFns, fn)
 }
 
+// Path returns the original --config path (file or directory) the loader was
+// constructed with. The dev-tool config-builder uses this to answer
+// /__api/config/files.
+func (l *Loader) Path() string {
+	return l.path
+}
+
+// IsDir reports whether the loader was given a directory of config files.
+func (l *Loader) IsDir() bool {
+	return l.isDir
+}
+
 // ConfigDir returns the directory that contains the config file(s).
 // Use this when you need the seed directory (e.g. for writing recorded routes
 // back to the config file). For stub file I/O, use StubRoot() instead so

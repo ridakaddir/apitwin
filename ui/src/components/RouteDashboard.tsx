@@ -1,13 +1,17 @@
 import { useState } from "react";
-import type { Config, Route, GRPCRoute } from "../types/config";
+import type { Config, GRPCRoute, Route, RouteKind } from "../types/config";
 import { RouteCard } from "./RouteCard";
 
 export function RouteDashboard({
   config,
   onTest,
+  onEdit,
+  onNew,
 }: {
   config: Config;
-  onTest: (route: Route | GRPCRoute, kind: "http" | "grpc") => void;
+  onTest: (route: Route | GRPCRoute, kind: RouteKind) => void;
+  onEdit: (route: Route | GRPCRoute, kind: RouteKind) => void;
+  onNew: (kind: RouteKind) => void;
 }) {
   const [search, setSearch] = useState("");
 
@@ -26,16 +30,36 @@ export function RouteDashboard({
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       <header className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight">apitwin</h1>
-        <div className="flex items-center gap-4 mt-3 text-sm text-zinc-400">
-          <span>
-            {httpRoutes.length} HTTP route{httpRoutes.length !== 1 && "s"}
-          </span>
-          {grpcRoutes.length > 0 && (
-            <span>
-              {grpcRoutes.length} gRPC route{grpcRoutes.length !== 1 && "s"}
-            </span>
-          )}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">apitwin</h1>
+            <div className="flex items-center gap-4 mt-3 text-sm text-zinc-400">
+              <span>
+                {httpRoutes.length} HTTP route{httpRoutes.length !== 1 && "s"}
+              </span>
+              {grpcRoutes.length > 0 && (
+                <span>
+                  {grpcRoutes.length} gRPC route{grpcRoutes.length !== 1 && "s"}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onNew("http")}
+              className="text-sm px-3 py-1.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30 cursor-pointer transition-colors"
+            >
+              + New HTTP route
+            </button>
+            <button
+              type="button"
+              onClick={() => onNew("grpc")}
+              className="text-sm px-3 py-1.5 rounded bg-blue-500/15 border border-blue-500/40 text-blue-300 hover:bg-blue-500/25 cursor-pointer transition-colors"
+            >
+              + New gRPC route
+            </button>
+          </div>
         </div>
         <input
           type="text"
@@ -53,7 +77,13 @@ export function RouteDashboard({
           </h2>
           <div className="space-y-2">
             {filteredHttp.map((route, i) => (
-              <RouteCard key={`http-${i}`} route={route} kind="http" onTest={onTest} />
+              <RouteCard
+                key={`http-${i}`}
+                route={route}
+                kind="http"
+                onTest={onTest}
+                onEdit={onEdit}
+              />
             ))}
           </div>
         </section>
@@ -66,7 +96,13 @@ export function RouteDashboard({
           </h2>
           <div className="space-y-2">
             {filteredGrpc.map((route, i) => (
-              <RouteCard key={`grpc-${i}`} route={route} kind="grpc" onTest={onTest} />
+              <RouteCard
+                key={`grpc-${i}`}
+                route={route}
+                kind="grpc"
+                onTest={onTest}
+                onEdit={onEdit}
+              />
             ))}
           </div>
         </section>

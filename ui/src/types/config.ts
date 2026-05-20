@@ -32,8 +32,47 @@ export interface Case {
   key: string;
   array_key: string;
   defaults: string;
+  wrap: string;
+  source: string;
   primary?: CascadePrimary;
   cascade?: CascadeTarget[];
+}
+
+export type RouteKind = "http" | "grpc";
+
+export interface ConfigFileInfo {
+  path: string;
+  name: string;
+  format: "toml" | "yaml" | "json" | "";
+  routeCount: number;
+  grpcRouteCount: number;
+  mtime: number;
+  writable: boolean;
+  containsRoute?: boolean;
+}
+
+export interface ValidationError {
+  path: string;
+  reason: string;
+}
+
+export interface ValidateResponse {
+  errors: ValidationError[];
+  grpcSchemaAvailable?: boolean;
+}
+
+export interface SaveRouteRequest {
+  file: string;
+  kind: RouteKind;
+  route: Route | GRPCRoute;
+  replace?: { match: string; method?: string };
+  ifMatch?: number;
+}
+
+export interface SaveRouteResponse {
+  ok: true;
+  file: string;
+  mtime: number;
 }
 
 export interface CascadePrimary {

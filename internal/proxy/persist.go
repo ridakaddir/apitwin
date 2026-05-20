@@ -120,7 +120,7 @@ func applyPersist(w http.ResponseWriter, r *http.Request, c config.Case, bodyByt
 		}
 		return true, filePath
 
-	case "append":
+	case "", "append":
 		if !persist.IsDirectoryPath(filePath, c.File) {
 			logger.Error("persist append", "file", filePath, "err", "append requires directory path")
 			writeJSON(w, http.StatusBadRequest, map[string]string{

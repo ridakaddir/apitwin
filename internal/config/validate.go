@@ -115,15 +115,23 @@ func ValidateGRPCRoutes(routes []GRPCRoute, schema PersistSchema) []ValidationEr
 			if !c.Persist {
 				continue
 			}
-			if !strings.EqualFold(c.Merge, "update") {
+			// Cascade mutations spell out their targets in primary/cascade
+			// fields; the case-level File is optional then.
+			if strings.EqualFold(c.Merge, "cascade") {
 				continue
 			}
 			if c.File == "" {
 				errs = append(errs, ValidationError{
 					Route:  route.Match,
 					Case:   name,
-					Reason: "persist+merge=update requires a non-empty file",
+					Reason: "persist=true requires a non-empty file (Body source → File on disk)",
 				})
+				continue
+			}
+			if !strings.EqualFold(c.Merge, "update") {
+				// Multi-message wrap/source enforcement targets update flows
+				// where the persisted file holds an entity rather than the
+				// full request envelope.
 				continue
 			}
 			if isWildcard || schema == nil {
@@ -216,14 +224,27 @@ func ValidateRESTRoutes(routes []Route) []ValidationError {
 			if !c.Persist {
 				continue
 			}
-			if !strings.EqualFold(c.Merge, "update") {
+			// Cascade mutations carry their own primary/cascade targets;
+			// the top-level File is optional in that case.
+			if strings.EqualFold(c.Merge, "cascade") {
 				continue
 			}
 			if c.File == "" {
 				errs = append(errs, ValidationError{
 					Route:  route.Method + " " + route.Match,
 					Case:   name,
-					Reason: "persist+merge=update requires a non-empty file",
+					Reason: "persist=true requires a non-empty file (Body source → File on disk)",
+				})
+				continue
+			}
+			// append writes one file per request, so the target must be a
+			// directory path. The runtime rejects a plain file with a 400.
+			merge := strings.ToLower(c.Merge)
+			if (merge == "" || merge == "append") && !strings.HasSuffix(c.File, "/") {
+				errs = append(errs, ValidationError{
+					Route:  route.Method + " " + route.Match,
+					Case:   name,
+					Reason: "persist+merge=append requires file to be a directory path ending in /",
 				})
 			}
 		}

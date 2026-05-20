@@ -18,10 +18,12 @@ export function RouteCard({
   route,
   kind,
   onTest,
+  onEdit,
 }: {
   route: Route | GRPCRoute;
   kind: "http" | "grpc";
   onTest: (route: Route | GRPCRoute, kind: "http" | "grpc") => void;
+  onEdit?: (route: Route | GRPCRoute, kind: "http" | "grpc") => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -64,6 +66,30 @@ export function RouteCard({
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
         </button>
+        {onEdit && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(route, kind);
+            }}
+            className="px-3 py-3 text-zinc-500 hover:text-emerald-400 transition-colors cursor-pointer border-l border-zinc-800"
+            title="Edit this route"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+              />
+            </svg>
+          </button>
+        )}
         <button
           onClick={(e) => {
             e.stopPropagation();

@@ -2,8 +2,8 @@ package config
 
 // Config is the top-level structure for apitwin config files (JSON/YAML/TOML).
 type Config struct {
-	Routes     []Route     `json:"routes"      yaml:"routes"      toml:"routes"`
-	GRPCRoutes []GRPCRoute `json:"grpc_routes" yaml:"grpc_routes" toml:"grpc_routes"`
+	Routes     []Route     `json:"routes,omitempty"      yaml:"routes,omitempty"      toml:"routes,omitempty"`
+	GRPCRoutes []GRPCRoute `json:"grpc_routes,omitempty" yaml:"grpc_routes,omitempty" toml:"grpc_routes,omitempty"`
 }
 
 // GRPCRoute defines a single interceptable gRPC method.
@@ -15,12 +15,12 @@ type Config struct {
 //
 // Case.File and Case.JSON hold protojson-compatible JSON (field names match the proto field names).
 type GRPCRoute struct {
-	Match       string          `json:"match"       yaml:"match"       toml:"match"`
-	Enabled     *bool           `json:"enabled"     yaml:"enabled"     toml:"enabled"`
-	Fallback    string          `json:"fallback"    yaml:"fallback"    toml:"fallback"`
-	Conditions  []Condition     `json:"conditions"  yaml:"conditions"  toml:"conditions"`
-	Cases       map[string]Case `json:"cases"       yaml:"cases"       toml:"cases"`
-	Transitions []Transition    `json:"transitions" yaml:"transitions" toml:"transitions"`
+	Match       string          `json:"match"                          yaml:"match"                          toml:"match"`
+	Enabled     *bool           `json:"enabled,omitempty"              yaml:"enabled,omitempty"              toml:"enabled,omitempty"`
+	Fallback    string          `json:"fallback,omitempty"             yaml:"fallback,omitempty"             toml:"fallback,omitempty"`
+	Conditions  []Condition     `json:"conditions,omitempty"           yaml:"conditions,omitempty"           toml:"conditions,omitempty"`
+	Cases       map[string]Case `json:"cases"                          yaml:"cases"                          toml:"cases"`
+	Transitions []Transition    `json:"transitions,omitempty"          yaml:"transitions,omitempty"          toml:"transitions,omitempty"`
 }
 
 // IsEnabled returns true if the gRPC route is enabled (defaults to true if not set).
@@ -40,19 +40,19 @@ func (r *GRPCRoute) GetTransitions() []Transition {
 
 // Route defines a single interceptable HTTP endpoint.
 type Route struct {
-	Method      string          `json:"method"      yaml:"method"      toml:"method"`
-	Match       string          `json:"match"       yaml:"match"       toml:"match"`
-	Enabled     *bool           `json:"enabled"     yaml:"enabled"     toml:"enabled"`
-	Fallback    string          `json:"fallback"    yaml:"fallback"    toml:"fallback"`
-	Conditions  []Condition     `json:"conditions"  yaml:"conditions"  toml:"conditions"`
-	Cases       map[string]Case `json:"cases"       yaml:"cases"       toml:"cases"`
-	Transitions []Transition    `json:"transitions" yaml:"transitions" toml:"transitions"`
+	Method      string          `json:"method"                yaml:"method"                toml:"method"`
+	Match       string          `json:"match"                 yaml:"match"                 toml:"match"`
+	Enabled     *bool           `json:"enabled,omitempty"     yaml:"enabled,omitempty"     toml:"enabled,omitempty"`
+	Fallback    string          `json:"fallback,omitempty"    yaml:"fallback,omitempty"    toml:"fallback,omitempty"`
+	Conditions  []Condition     `json:"conditions,omitempty"  yaml:"conditions,omitempty"  toml:"conditions,omitempty"`
+	Cases       map[string]Case `json:"cases"                 yaml:"cases"                 toml:"cases"`
+	Transitions []Transition    `json:"transitions,omitempty" yaml:"transitions,omitempty" toml:"transitions,omitempty"`
 }
 
 // Transition defines one step in a time-based response sequence.
 type Transition struct {
-	Case     string `json:"case"     yaml:"case"     toml:"case"`
-	Duration int    `json:"duration" yaml:"duration" toml:"duration"` // seconds this state lasts; omit or 0 on the last entry for a terminal state
+	Case     string `json:"case"               yaml:"case"               toml:"case"`
+	Duration int    `json:"duration,omitempty" yaml:"duration,omitempty" toml:"duration,omitempty"` // seconds this state lasts; omit or 0 on the last entry for a terminal state
 }
 
 // IsEnabled returns true if the route is enabled (defaults to true if not set).
@@ -72,26 +72,26 @@ func (r *Route) GetTransitions() []Transition {
 
 // Condition maps an incoming request attribute to a case name.
 type Condition struct {
-	Source string `json:"source" yaml:"source" toml:"source"` // body | query | header
-	Field  string `json:"field"  yaml:"field"  toml:"field"`  // dot-notation or key name
-	Op     string `json:"op"     yaml:"op"     toml:"op"`     // eq | neq | contains | regex | exists | not_exists
-	Value  string `json:"value"  yaml:"value"  toml:"value"`
-	Case   string `json:"case"   yaml:"case"   toml:"case"` // case key to activate
+	Source string `json:"source"          yaml:"source"          toml:"source"`          // body | query | header
+	Field  string `json:"field"           yaml:"field"           toml:"field"`           // dot-notation or key name
+	Op     string `json:"op"              yaml:"op"              toml:"op"`              // eq | neq | contains | regex | exists | not_exists
+	Value  string `json:"value,omitempty" yaml:"value,omitempty" toml:"value,omitempty"` // unused for exists / not_exists
+	Case   string `json:"case"            yaml:"case"            toml:"case"`            // case key to activate
 }
 
 // Case defines a mock response.
 type Case struct {
-	Status   int    `json:"status"    yaml:"status"    toml:"status"`
-	JSON     string `json:"json"      yaml:"json"      toml:"json"`
-	File     string `json:"file"      yaml:"file"      toml:"file"`
-	Delay    int    `json:"delay"     yaml:"delay"     toml:"delay"`
-	Persist  bool   `json:"persist"   yaml:"persist"   toml:"persist"`
-	Merge    string `json:"merge"     yaml:"merge"     toml:"merge"`     // append | update | delete | cascade
-	Key      string `json:"key"       yaml:"key"       toml:"key"`       // record lookup key
-	ArrayKey string `json:"array_key" yaml:"array_key" toml:"array_key"` // array field in stub JSON
-	Defaults string `json:"defaults"  yaml:"defaults"  toml:"defaults"`  // JSON file with default values for append/update
-	Wrap     string `json:"wrap"      yaml:"wrap"      toml:"wrap"`      // wrap response into {"field": <content>}
-	Source   string `json:"source"    yaml:"source"    toml:"source"`    // dot-path into request body; only that sub-object is persisted
+	Status   int    `json:"status,omitempty"    yaml:"status,omitempty"    toml:"status,omitempty"`
+	JSON     string `json:"json,omitempty"      yaml:"json,omitempty"      toml:"json,omitempty"`
+	File     string `json:"file,omitempty"      yaml:"file,omitempty"      toml:"file,omitempty"`
+	Delay    int    `json:"delay,omitempty"     yaml:"delay,omitempty"     toml:"delay,omitempty"`
+	Persist  bool   `json:"persist,omitempty"   yaml:"persist,omitempty"   toml:"persist,omitempty"`
+	Merge    string `json:"merge,omitempty"     yaml:"merge,omitempty"     toml:"merge,omitempty"`     // append | update | delete | cascade
+	Key      string `json:"key,omitempty"       yaml:"key,omitempty"       toml:"key,omitempty"`       // record lookup key
+	ArrayKey string `json:"array_key,omitempty" yaml:"array_key,omitempty" toml:"array_key,omitempty"` // array field in stub JSON
+	Defaults string `json:"defaults,omitempty"  yaml:"defaults,omitempty"  toml:"defaults,omitempty"`  // JSON file with default values for append/update
+	Wrap     string `json:"wrap,omitempty"      yaml:"wrap,omitempty"      toml:"wrap,omitempty"`      // wrap response into {"field": <content>}
+	Source   string `json:"source,omitempty"    yaml:"source,omitempty"    toml:"source,omitempty"`    // dot-path into request body; only that sub-object is persisted
 
 	// Cascade mutation fields
 	Primary *CascadePrimary `json:"primary,omitempty"  yaml:"primary,omitempty"  toml:"primary,omitempty"`

@@ -51,6 +51,7 @@ export function useGRPCSchemas() {
 export function useConfig(pollInterval = 3000) {
   const [config, setConfig] = useState<Config | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -68,12 +69,17 @@ export function useConfig(pollInterval = 3000) {
     };
 
     load();
-    const id = setInterval(load, pollInterval);
+    if (pollInterval > 0) {
+      const id = setInterval(load, pollInterval);
+      return () => {
+        active = false;
+        clearInterval(id);
+      };
+    }
     return () => {
       active = false;
-      clearInterval(id);
     };
-  }, [pollInterval]);
+  }, [pollInterval, reloadKey]);
 
-  return { config, error };
+  return { config, error, reload: () => setReloadKey((k) => k + 1) };
 }

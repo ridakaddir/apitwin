@@ -168,7 +168,7 @@ func (h *handler) applyGRPCPersist(
 		}
 		return codes.OK, true, updated, filePath
 
-	case "append":
+	case "", "append":
 		if !persist.IsDirectoryPath(filePath, c.File) {
 			logger.Error("grpc persist append", "file", filePath, "err", "append requires directory path")
 			logger.LogGRPC(fullMethod, codes.InvalidArgument, time.Since(start), logger.SourceStub)

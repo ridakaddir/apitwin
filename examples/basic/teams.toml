@@ -1,0 +1,22 @@
+# Stateful /teams collection — directory-stub pattern.
+# GET aggregates every JSON file in stubs/teams/; POST appends a new file.
+# Both routes point at the same directory, which is what makes POST → GET
+# feel stateful.
+
+[[routes]]
+  method = "GET"
+  match = "/teams"
+  fallback = "success"
+  [routes.cases.success]
+    status = 200
+    file = "stubs/teams/"
+
+[[routes]]
+  method = "POST"
+  match = "/teams"
+  fallback = "success"
+  [routes.cases.success]
+    status = 201
+    file = "stubs/teams/"
+    persist = true
+    merge = "append"
