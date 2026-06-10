@@ -79,6 +79,10 @@ func TestReadDirEmpty(t *testing.T) {
 	result, err := ReadDir(dir)
 	require.NoError(t, err)
 
+	// Raw bytes must be "[]\n", not "null\n": an existing-but-empty directory
+	// should serialize to an empty JSON array, not JSON null.
+	assert.Equal(t, "[]\n", string(result))
+
 	items := readJSONArray(t, result)
 	assert.Empty(t, items)
 }
