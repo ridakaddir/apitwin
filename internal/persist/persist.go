@@ -28,7 +28,9 @@ func ReadDir(dirPath string) ([]byte, error) {
 		return nil, fmt.Errorf("reading directory %q: %w", dirPath, err)
 	}
 
-	var items []interface{}
+	// Non-nil empty slice so an existing-but-empty directory marshals to "[]"
+	// rather than "null", keeping the "[] for empty or non-existent" contract.
+	items := []interface{}{}
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 			continue
